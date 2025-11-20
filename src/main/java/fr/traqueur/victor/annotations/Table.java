@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Table {
 
-    String table() default "";
+    String table();
 
     String schema() default "";
 }
