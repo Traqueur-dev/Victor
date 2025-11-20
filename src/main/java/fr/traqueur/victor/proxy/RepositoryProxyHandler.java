@@ -25,7 +25,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         implements InvocationHandler {
 
     private final Class<DTO> dtoClass;
-    private final Class<MODEL> modelClass;
     private final Class<ID> idClass;
     private final EntityMetadata entityMetadata;
     private final SqlExecutor sqlExecutor;
@@ -35,7 +34,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     public RepositoryProxyHandler(Class<?> repositoryInterface, SqlExecutor sqlExecutor, SqlGenerator sqlGenerator) {
         var typeInfo = TypeResolver.resolveRepositoryTypes(repositoryInterface);
         this.dtoClass = (Class<DTO>) typeInfo.dtoClass();
-        this.modelClass = (Class<MODEL>) typeInfo.modelClass();
+        Class<MODEL> modelClass = (Class<MODEL>) typeInfo.modelClass();
         this.idClass = (Class<ID>) typeInfo.idClass();
         this.entityMetadata = EntityMetadataRegistry.getInstance().getMetadata(modelClass);
         this.sqlExecutor = sqlExecutor;
@@ -43,7 +42,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    public Object invoke(Object proxy, Method method, Object[] args) {
         String methodName = method.getName();
 
         return switch (methodName) {
@@ -119,8 +118,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         String sql = sqlGenerator.generateSelectById(entityMetadata);
         Object[] params = { id };
 
-        @SuppressWarnings("unchecked")
-        var mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
         DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
 
         return Optional.ofNullable(result);
@@ -128,9 +126,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
 
     private List<DTO> findAll() {
         String sql = sqlGenerator.generateSelectAll(entityMetadata);
-
-        @SuppressWarnings("unchecked")
-        var mapper = (SqlExecutor.RowMapper<DTO>) DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, null, mapper);
     }
 
@@ -181,7 +177,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private Query<DTO> query() {
-        return new QueryProxyHandler<DTO, MODEL, ID>(dtoClass, entityMetadata, sqlExecutor, sqlGenerator).createProxy();
+        return new QueryProxyHandler<>(dtoClass, entityMetadata, sqlExecutor).createProxy();
     }
 
     private Object handleDynamicFinderMethod(Method method, Object[] args) {
@@ -219,7 +215,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         return allValues.toArray();
     }
 
-    @SuppressWarnings("unchecked")
     private DTO createDtoFromModel(MODEL model) {
         try {
             if (dtoClass.isRecord()) {
@@ -232,7 +227,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         }
     }
 
-    @SuppressWarnings("unchecked")
     private DTO createRecordFromModel(MODEL model) throws Exception {
         var components = dtoClass.getRecordComponents();
         Object[] args = new Object[components.length];
@@ -254,7 +248,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         return constructor.newInstance(args);
     }
 
-    @SuppressWarnings("unchecked")
     private DTO createClassFromModel(MODEL model) throws Exception {
         DTO dto = dtoClass.getDeclaredConstructor().newInstance();
 

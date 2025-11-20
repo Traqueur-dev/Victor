@@ -8,6 +8,7 @@ import fr.traqueur.victor.exceptions.VictorException;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public final class SqlExecutor {
@@ -164,7 +165,7 @@ public final class SqlExecutor {
         if (configuration.showSql()) {
             System.out.println("SQL: " + sql);
             if (params != null && params.length > 0) {
-                System.out.println("Parameters: " + java.util.Arrays.toString(params));
+                System.out.println("Parameters: " + Arrays.toString(params));
             }
         }
     }

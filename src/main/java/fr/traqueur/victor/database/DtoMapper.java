@@ -10,6 +10,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.RecordComponent;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 
 public final class DtoMapper {
@@ -20,9 +22,8 @@ public final class DtoMapper {
         return rs -> mapResultSetToDto(rs, dtoClass, metadata, sqlExecutor);
     }
 
-    @SuppressWarnings("unchecked")
     private static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> DTO mapResultSetToDto(
-            ResultSet rs, Class<DTO> dtoClass, EntityMetadata metadata, SqlExecutor sqlExecutor) throws SQLException {
+            ResultSet rs, Class<DTO> dtoClass, EntityMetadata metadata, SqlExecutor sqlExecutor) {
 
         try {
             if (dtoClass.isRecord()) {
@@ -36,7 +37,6 @@ public final class DtoMapper {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> DTO mapToRecord(
             ResultSet rs, Class<DTO> recordClass, EntityMetadata metadata, SqlExecutor sqlExecutor)
             throws Exception {
@@ -74,7 +74,6 @@ public final class DtoMapper {
         return constructor.newInstance(args);
     }
 
-    @SuppressWarnings("unchecked")
     private static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> DTO mapToClass(
             ResultSet rs, Class<DTO> dtoClass, EntityMetadata metadata, SqlExecutor sqlExecutor)
             throws Exception {
@@ -163,11 +162,11 @@ public final class DtoMapper {
         }
 
         // LocalDateTime conversions
-        if (targetType == java.time.LocalDateTime.class) {
-            if (value instanceof java.sql.Timestamp ts) {
+        if (targetType == LocalDateTime.class) {
+            if (value instanceof Timestamp ts) {
                 return ts.toLocalDateTime();
             } else if (value instanceof String str) {
-                return java.time.LocalDateTime.parse(str);
+                return LocalDateTime.parse(str);
             }
         }
 

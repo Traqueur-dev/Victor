@@ -21,15 +21,13 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     private final Class<DTO> dtoClass;
     private final EntityMetadata entityMetadata;
     private final SqlExecutor sqlExecutor;
-    private final SqlGenerator sqlGenerator;
     private final QueryBuilder queryBuilder;
 
     public QueryProxyHandler(Class<DTO> dtoClass, EntityMetadata entityMetadata,
-                             SqlExecutor sqlExecutor, SqlGenerator sqlGenerator) {
+                             SqlExecutor sqlExecutor) {
         this.dtoClass = dtoClass;
         this.entityMetadata = entityMetadata;
         this.sqlExecutor = sqlExecutor;
-        this.sqlGenerator = sqlGenerator;
         this.queryBuilder = new QueryBuilder(entityMetadata);
     }
 
@@ -43,15 +41,15 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
                 yield proxy; // Return the same proxy instance
             }
             case "where" -> {
-                queryBuilder.where((String) args[0], getVarArgs(args, 1));
+                queryBuilder.where((String) args[0], getVarArgs(args));
                 yield proxy;
             }
             case "and" -> {
-                queryBuilder.and((String) args[0], getVarArgs(args, 1));
+                queryBuilder.and((String) args[0], getVarArgs(args));
                 yield proxy;
             }
             case "or" -> {
-                queryBuilder.or((String) args[0], getVarArgs(args, 1));
+                queryBuilder.or((String) args[0], getVarArgs(args));
                 yield proxy;
             }
             case "join" -> {
@@ -91,7 +89,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
                 yield proxy;
             }
             case "having" -> {
-                queryBuilder.having((String) args[0], getVarArgs(args, 1));
+                queryBuilder.having((String) args[0], getVarArgs(args));
                 yield proxy;
             }
             case "findAll" -> findAll();
@@ -103,21 +101,19 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         };
     }
 
-    private Object[] getVarArgs(Object[] args, int startIndex) {
-        if (args == null || args.length <= startIndex) {
+    private Object[] getVarArgs(Object[] args) {
+        if (args == null || args.length <= 1) {
             return new Object[0];
         }
-        Object[] result = new Object[args.length - startIndex];
-        System.arraycopy(args, startIndex, result, 0, result.length);
+        Object[] result = new Object[args.length - 1];
+        System.arraycopy(args, 1, result, 0, result.length);
         return result;
     }
 
     private List<DTO> findAll() {
         String sql = queryBuilder.build();
         Object[] params = queryBuilder.getParameters();
-
-        @SuppressWarnings("unchecked")
-        var mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, params, mapper);
     }
 
@@ -125,8 +121,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         String sql = queryBuilder.copy().limit(1).build();
         Object[] params = queryBuilder.getParameters();
 
-        @SuppressWarnings("unchecked")
-        var mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
         DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
         return Optional.ofNullable(result);
     }
@@ -173,56 +168,48 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
             this.entityMetadata = entityMetadata;
         }
 
-        public QueryBuilder select(String[] columns) {
+        public void select(String[] columns) {
             selectColumns.clear();
             selectColumns.addAll(List.of(columns));
-            return this;
         }
 
-        public QueryBuilder where(String condition, Object[] params) {
+        public void where(String condition, Object[] params) {
             whereConditions.clear();
             parameters.clear();
             whereConditions.add(condition);
             if (params != null) {
                 parameters.addAll(List.of(params));
             }
-            return this;
         }
 
-        public QueryBuilder and(String condition, Object[] params) {
+        public void and(String condition, Object[] params) {
             whereConditions.add("AND " + condition);
             if (params != null) {
                 parameters.addAll(List.of(params));
             }
-            return this;
         }
 
-        public QueryBuilder or(String condition, Object[] params) {
+        public void or(String condition, Object[] params) {
             whereConditions.add("OR " + condition);
             if (params != null) {
                 parameters.addAll(List.of(params));
             }
-            return this;
         }
 
-        public QueryBuilder join(String table, String condition) {
+        public void join(String table, String condition) {
             joins.add("INNER JOIN " + table + " ON " + condition);
-            return this;
         }
 
-        public QueryBuilder leftJoin(String table, String condition) {
+        public void leftJoin(String table, String condition) {
             joins.add("LEFT JOIN " + table + " ON " + condition);
-            return this;
         }
 
-        public QueryBuilder rightJoin(String table, String condition) {
+        public void rightJoin(String table, String condition) {
             joins.add("RIGHT JOIN " + table + " ON " + condition);
-            return this;
         }
 
-        public QueryBuilder orderBy(String column, Query.Order order) {
+        public void orderBy(String column, Query.Order order) {
             orderByColumns.add(column + " " + order);
-            return this;
         }
 
         public QueryBuilder limit(int limit) {
@@ -230,23 +217,20 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
             return this;
         }
 
-        public QueryBuilder offset(int offset) {
+        public void offset(int offset) {
             this.offsetValue = offset;
-            return this;
         }
 
-        public QueryBuilder groupBy(String[] columns) {
+        public void groupBy(String[] columns) {
             groupByColumns.clear();
             groupByColumns.addAll(List.of(columns));
-            return this;
         }
 
-        public QueryBuilder having(String condition, Object[] params) {
+        public void having(String condition, Object[] params) {
             havingConditions.add(condition);
             if (params != null) {
                 parameters.addAll(List.of(params));
             }
-            return this;
         }
 
         public Object[] getParameters() {

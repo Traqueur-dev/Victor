@@ -11,8 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 public final class VictorConverter {
-    
-    @SuppressWarnings("unchecked")
+
     public static <DTO extends Dto<MODEL>, MODEL extends Entity<?>>
            DTO modelToDto(MODEL model, Class<DTO> dtoClass) {
         
@@ -28,8 +27,7 @@ public final class VictorConverter {
             throw new VictorConversionException(model.getClass(), dtoClass, "Failed to convert model to DTO", e);
         }
     }
-    
-    @SuppressWarnings("unchecked")
+
     public static <MODEL extends Entity<?>> MODEL dtoToModel(Dto<MODEL> dto, Class<MODEL> modelClass) {
         if (dto == null) return null;
         
@@ -41,8 +39,7 @@ public final class VictorConverter {
             throw new VictorConversionException(dto.getClass(), modelClass, "Failed to convert DTO to model", e);
         }
     }
-    
-    @SuppressWarnings("unchecked")
+
     private static <DTO> DTO convertModelToRecord(Object model, Class<DTO> recordClass) throws Exception {
         RecordComponent[] components = recordClass.getRecordComponents();
         Object[] args = new Object[components.length];
@@ -65,8 +62,7 @@ public final class VictorConverter {
         
         return constructor.newInstance(args);
     }
-    
-    @SuppressWarnings("unchecked")
+
     private static <DTO> DTO convertModelToClass(Object model, Class<DTO> dtoClass) throws Exception {
         DTO dto = dtoClass.getDeclaredConstructor().newInstance();
         

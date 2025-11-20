@@ -55,11 +55,7 @@ public final class TypeResolver {
             if (genericInterface instanceof ParameterizedType paramType) {
                 Type rawType = paramType.getRawType();
                 if (rawType instanceof Class<?> superInterface) {
-                    try {
-                        return getGenericTypes(superInterface, targetInterface);
-                    } catch (VictorException ignored) {
-                        // Continue searching in other interfaces
-                    }
+                    return getGenericTypes(superInterface, targetInterface);
                 }
             }
         }
@@ -67,35 +63,11 @@ public final class TypeResolver {
         // Check implemented interfaces
         for (Class<?> implementedInterface : interfaceClass.getInterfaces()) {
             if (targetInterface.isAssignableFrom(implementedInterface)) {
-                try {
-                    return getGenericTypes(implementedInterface, targetInterface);
-                } catch (VictorException ignored) {
-                    // Continue searching
-                }
+                return getGenericTypes(implementedInterface, targetInterface);
             }
         }
 
         return new Type[0];
-    }
-
-    public static boolean isDtoClass(Class<?> clazz) {
-        return Dto.class.isAssignableFrom(clazz);
-    }
-
-    public static boolean isEntityClass(Class<?> clazz) {
-        return Entity.class.isAssignableFrom(clazz);
-    }
-
-    public static Class<?> extractIdType(Class<? extends Entity<?>> entityClass) {
-        Type[] interfaces = entityClass.getGenericInterfaces();
-        for (Type intf : interfaces) {
-            if (intf instanceof ParameterizedType paramType) {
-                if (paramType.getRawType() == Entity.class) {
-                    return (Class<?>) paramType.getActualTypeArguments()[0];
-                }
-            }
-        }
-        return Object.class;
     }
 
     public record RepositoryTypeInfo(Class<?> dtoClass, Class<?> modelClass, Class<?> idClass) {}
