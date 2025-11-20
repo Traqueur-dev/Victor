@@ -17,23 +17,27 @@ rootProject.extra.properties["sha"]?.let { sha ->
     version = sha
 }
 
-repositories {
-    mavenCentral()
-}
+allprojects {
+    apply { plugin("java-library") }
 
-dependencies {
+    repositories {
+        mavenCentral()
+    }
 
-}
+    dependencies {
+        api("org.slf4j:slf4j-api:2.0.9")
 
+        testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
 
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 
-val targetJavaVersion = 21
-java {
-    val javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    sourceCompatibility = javaVersion
-    targetCompatibility = javaVersion
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
+    tasks.test {
+        useJUnitPlatform()
     }
 }
 
