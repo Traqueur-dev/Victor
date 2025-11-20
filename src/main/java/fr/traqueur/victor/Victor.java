@@ -40,6 +40,30 @@ public final class Victor {
         return new VictorBuilder();
     }
 
+    public static void autoConnect(String jdbcUrl) {
+        if (defaultInstance != null) {
+            defaultInstance.close();
+        }
+        defaultInstance = configure()
+                .url(jdbcUrl)
+                .autoDetectDialect()
+                .autoMigrate()
+                .autoScanEntities()
+                .build();
+    }
+
+    public static void autoConnectPackages(String jdbcUrl, String... packages) {
+        if (defaultInstance != null) {
+            defaultInstance.close();
+        }
+        defaultInstance = configure()
+                .url(jdbcUrl)
+                .autoDetectDialect()
+                .autoMigrate()
+                .autoScanEntities(packages)
+                .build();
+    }
+
     public static Victor sqlite(String path) {
         return configure()
                 .sqlite()
@@ -135,5 +159,9 @@ public final class Victor {
 
     static Victor create(VictorEngine engine) {
         return new Victor(engine);
+    }
+
+    public void runMigrations() {
+        engine.runMigrations();
     }
 }

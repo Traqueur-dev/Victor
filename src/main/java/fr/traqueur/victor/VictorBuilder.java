@@ -1,6 +1,7 @@
 package fr.traqueur.victor;
 
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
+import fr.traqueur.victor.scanner.EntityScanner;
 import fr.traqueur.victor.types.VictorDialect;
 
 import java.util.*;
@@ -19,6 +20,8 @@ public final class VictorBuilder {
     private boolean showSql = false;
     private final Properties properties = new Properties();
     private final Set<Class<?>> entityClasses = new HashSet<>();
+    private boolean autoScanEntities = false;
+    private String[] scanPackages = new String[0];
 
     public VictorBuilder sqlite() {
         this.dialect = VictorDialect.SQLITE;
@@ -109,6 +112,17 @@ public final class VictorBuilder {
         return this;
     }
 
+    public VictorBuilder autoScanEntities() {
+        this.autoScanEntities = true;
+        return this;
+    }
+
+    public VictorBuilder autoScanEntities(String... packages) {
+        this.autoScanEntities = true;
+        this.scanPackages = packages;
+        return this;
+    }
+
     public VictorBuilder autoDetectDialect() {
         if (customUrl != null) {
             this.dialect = VictorDialect.fromJdbcUrl(customUrl);
@@ -118,6 +132,21 @@ public final class VictorBuilder {
 
     public Victor build() {
         validate();
+
+        // Auto-scan entities if enabled
+        if (autoScanEntities) {
+            System.out.println("Auto-scanning for entities...");
+            Set<Class<?>> discoveredEntities;
+
+            if (scanPackages.length > 0) {
+                discoveredEntities = EntityScanner.scanPackages(scanPackages);
+            } else {
+                discoveredEntities = EntityScanner.scanForEntities();
+            }
+
+            entityClasses.addAll(discoveredEntities);
+            System.out.println("Auto-discovered " + discoveredEntities.size() + " entities");
+        }
 
         VictorConfiguration config = createConfiguration();
         VictorEngine engine = new VictorEngine(config);

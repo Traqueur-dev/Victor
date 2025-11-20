@@ -1,8 +1,12 @@
 package fr.traqueur.victor.proxy;
 
+import fr.traqueur.victor.database.SqlExecutor;
+import fr.traqueur.victor.database.SqlGenerator;
 import fr.traqueur.victor.entities.Dto;
+import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.database.DtoMapper;
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.lang.reflect.InvocationHandler;
@@ -12,15 +16,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler {
+public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> implements InvocationHandler {
 
     private final Class<DTO> dtoClass;
     private final EntityMetadata entityMetadata;
+    private final SqlExecutor sqlExecutor;
+    private final SqlGenerator sqlGenerator;
     private final QueryBuilder queryBuilder;
 
-    public QueryProxyHandler(Class<DTO> dtoClass, EntityMetadata entityMetadata) {
+    public QueryProxyHandler(Class<DTO> dtoClass, EntityMetadata entityMetadata,
+                             SqlExecutor sqlExecutor, SqlGenerator sqlGenerator) {
         this.dtoClass = dtoClass;
         this.entityMetadata = entityMetadata;
+        this.sqlExecutor = sqlExecutor;
+        this.sqlGenerator = sqlGenerator;
         this.queryBuilder = new QueryBuilder(entityMetadata);
     }
 
@@ -105,16 +114,21 @@ public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler 
 
     private List<DTO> findAll() {
         String sql = queryBuilder.build();
-        // TODO: Execute SQL and convert results to DTOs
-        System.out.println("Executing query: " + sql);
-        return List.of();
+        Object[] params = queryBuilder.getParameters();
+
+        @SuppressWarnings("unchecked")
+        var mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        return sqlExecutor.executeQuery(sql, params, mapper);
     }
 
     private Optional<DTO> findOne() {
         String sql = queryBuilder.copy().limit(1).build();
-        // TODO: Execute SQL and convert result to DTO
-        System.out.println("Executing single query: " + sql);
-        return Optional.empty();
+        Object[] params = queryBuilder.getParameters();
+
+        @SuppressWarnings("unchecked")
+        var mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
+        return Optional.ofNullable(result);
     }
 
     private DTO findFirst() {
@@ -124,9 +138,9 @@ public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler 
 
     private long count() {
         String sql = queryBuilder.buildCount();
-        // TODO: Execute count query
-        System.out.println("Executing count query: " + sql);
-        return 0L;
+        Object[] params = queryBuilder.getParameters();
+
+        return sqlExecutor.executeCount(sql, params);
     }
 
     private boolean exists() {
@@ -147,6 +161,7 @@ public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler 
         private final EntityMetadata entityMetadata;
         private final List<String> selectColumns = new ArrayList<>();
         private final List<String> whereConditions = new ArrayList<>();
+        private final List<Object> parameters = new ArrayList<>();
         private final List<String> joins = new ArrayList<>();
         private final List<String> orderByColumns = new ArrayList<>();
         private final List<String> groupByColumns = new ArrayList<>();
@@ -166,17 +181,27 @@ public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler 
 
         public QueryBuilder where(String condition, Object[] params) {
             whereConditions.clear();
+            parameters.clear();
             whereConditions.add(condition);
+            if (params != null) {
+                parameters.addAll(List.of(params));
+            }
             return this;
         }
 
         public QueryBuilder and(String condition, Object[] params) {
             whereConditions.add("AND " + condition);
+            if (params != null) {
+                parameters.addAll(List.of(params));
+            }
             return this;
         }
 
         public QueryBuilder or(String condition, Object[] params) {
             whereConditions.add("OR " + condition);
+            if (params != null) {
+                parameters.addAll(List.of(params));
+            }
             return this;
         }
 
@@ -218,13 +243,21 @@ public class QueryProxyHandler<DTO extends Dto<?>> implements InvocationHandler 
 
         public QueryBuilder having(String condition, Object[] params) {
             havingConditions.add(condition);
+            if (params != null) {
+                parameters.addAll(List.of(params));
+            }
             return this;
+        }
+
+        public Object[] getParameters() {
+            return parameters.toArray();
         }
 
         public QueryBuilder copy() {
             QueryBuilder copy = new QueryBuilder(this.entityMetadata);
             copy.selectColumns.addAll(this.selectColumns);
             copy.whereConditions.addAll(this.whereConditions);
+            copy.parameters.addAll(this.parameters);
             copy.joins.addAll(this.joins);
             copy.orderByColumns.addAll(this.orderByColumns);
             copy.groupByColumns.addAll(this.groupByColumns);

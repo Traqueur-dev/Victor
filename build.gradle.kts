@@ -54,6 +54,20 @@ allprojects {
     }
 }
 
+dependencies {
+    testImplementation("org.xerial:sqlite-jdbc:3.44.1.0")
+    testImplementation("com.h2database:h2:2.2.224")
+    testImplementation("com.mysql:mysql-connector-j:8.2.0")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.3.0")
+    testImplementation("org.postgresql:postgresql:42.7.7")
+
+    testImplementation("org.testcontainers:testcontainers:1.19.0")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.0")
+    testImplementation("org.testcontainers:mysql:1.19.0")
+    testImplementation("org.testcontainers:mariadb:1.19.0")
+    testImplementation("org.testcontainers:postgresql:1.19.0")
+}
+
 tasks.register("generateVersionProperties") {
     doLast {
         val name = project.name.lowercase(Locale.getDefault())
