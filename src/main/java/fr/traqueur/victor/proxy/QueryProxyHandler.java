@@ -1,7 +1,7 @@
 package fr.traqueur.victor.proxy;
 
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.database.SqlGenerator;
+import fr.traqueur.victor.entities.dialect.Dialect; // ✅ CHANGEMENT: Dialect au lieu de SqlGenerator
 import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
@@ -24,11 +24,11 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     private final QueryBuilder queryBuilder;
 
     public QueryProxyHandler(Class<DTO> dtoClass, EntityMetadata entityMetadata,
-                             SqlExecutor sqlExecutor) {
+                             SqlExecutor sqlExecutor, Dialect dialect) {
         this.dtoClass = dtoClass;
         this.entityMetadata = entityMetadata;
         this.sqlExecutor = sqlExecutor;
-        this.queryBuilder = new QueryBuilder(entityMetadata);
+        this.queryBuilder = new QueryBuilder(entityMetadata, dialect); // ✅ Passer le dialect
     }
 
     @Override
@@ -151,9 +151,9 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         );
     }
 
-    // Inner class for building SQL queries
     private static class QueryBuilder {
         private final EntityMetadata entityMetadata;
+        private final Dialect dialect; // ✅ AJOUT: Support Dialect
         private final List<String> selectColumns = new ArrayList<>();
         private final List<String> whereConditions = new ArrayList<>();
         private final List<Object> parameters = new ArrayList<>();
@@ -164,13 +164,16 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         private Integer limitValue;
         private Integer offsetValue;
 
-        public QueryBuilder(EntityMetadata entityMetadata) {
+        public QueryBuilder(EntityMetadata entityMetadata, Dialect dialect) {
             this.entityMetadata = entityMetadata;
+            this.dialect = dialect;
         }
 
         public void select(String[] columns) {
             selectColumns.clear();
-            selectColumns.addAll(List.of(columns));
+            for (String column : columns) {
+                selectColumns.add(dialect.quoteIdentifier(column));
+            }
         }
 
         public void where(String condition, Object[] params) {
@@ -197,19 +200,19 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         public void join(String table, String condition) {
-            joins.add("INNER JOIN " + table + " ON " + condition);
+            joins.add("INNER JOIN " + dialect.quoteIdentifier(table) + " ON " + condition);
         }
 
         public void leftJoin(String table, String condition) {
-            joins.add("LEFT JOIN " + table + " ON " + condition);
+            joins.add("LEFT JOIN " + dialect.quoteIdentifier(table) + " ON " + condition);
         }
 
         public void rightJoin(String table, String condition) {
-            joins.add("RIGHT JOIN " + table + " ON " + condition);
+            joins.add("RIGHT JOIN " + dialect.quoteIdentifier(table) + " ON " + condition);
         }
 
         public void orderBy(String column, Query.Order order) {
-            orderByColumns.add(column + " " + order);
+            orderByColumns.add(dialect.quoteIdentifier(column) + " " + order);
         }
 
         public QueryBuilder limit(int limit) {
@@ -223,7 +226,9 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
 
         public void groupBy(String[] columns) {
             groupByColumns.clear();
-            groupByColumns.addAll(List.of(columns));
+            for (String column : columns) {
+                groupByColumns.add(dialect.quoteIdentifier(column));
+            }
         }
 
         public void having(String condition, Object[] params) {
@@ -238,7 +243,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         public QueryBuilder copy() {
-            QueryBuilder copy = new QueryBuilder(this.entityMetadata);
+            QueryBuilder copy = new QueryBuilder(this.entityMetadata, this.dialect);
             copy.selectColumns.addAll(this.selectColumns);
             copy.whereConditions.addAll(this.whereConditions);
             copy.parameters.addAll(this.parameters);
@@ -260,7 +265,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
                 sql.append(String.join(", ", selectColumns));
             }
 
-            sql.append(" FROM ").append(entityMetadata.getFullTableName());
+            sql.append(" FROM ").append(getQuotedFullTableName());
 
             if (!joins.isEmpty()) {
                 sql.append(" ").append(String.join(" ", joins));
@@ -295,7 +300,8 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
 
         public String buildCount() {
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ");
-            sql.append(entityMetadata.getFullTableName());
+
+            sql.append(getQuotedFullTableName());
 
             if (!joins.isEmpty()) {
                 sql.append(" ").append(String.join(" ", joins));
@@ -306,6 +312,14 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
             }
 
             return sql.toString();
+        }
+
+        private String getQuotedFullTableName() {
+            String tableName = dialect.quoteIdentifier(entityMetadata.getTableName());
+            if (entityMetadata.getSchema() != null) {
+                return dialect.quoteIdentifier(entityMetadata.getSchema()) + "." + tableName;
+            }
+            return tableName;
         }
     }
 }

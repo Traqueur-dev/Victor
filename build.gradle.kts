@@ -18,7 +18,10 @@ rootProject.extra.properties["sha"]?.let { sha ->
 }
 
 allprojects {
-    apply { plugin("java-library") }
+    apply {
+        plugin("java-library")
+        plugin("com.gradleup.shadow")
+    }
 
     repositories {
         mavenCentral()
@@ -55,17 +58,7 @@ allprojects {
 }
 
 dependencies {
-    testImplementation("org.xerial:sqlite-jdbc:3.44.1.0")
-    testImplementation("com.h2database:h2:2.2.224")
-    testImplementation("com.mysql:mysql-connector-j:8.2.0")
-    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.3.0")
-    testImplementation("org.postgresql:postgresql:42.7.7")
-
-    testImplementation("org.testcontainers:testcontainers:1.19.0")
     testImplementation("org.testcontainers:junit-jupiter:1.19.0")
-    testImplementation("org.testcontainers:mysql:1.19.0")
-    testImplementation("org.testcontainers:mariadb:1.19.0")
-    testImplementation("org.testcontainers:postgresql:1.19.0")
 }
 
 tasks.register("generateVersionProperties") {
@@ -81,8 +74,21 @@ tasks.build {
     dependsOn(tasks.shadowJar)
 }
 
+// Shadow JAR principal - combine core + tous les dialectes
 tasks.shadowJar {
-    archiveClassifier.set("")
+    archiveClassifier.set("all-dialects")
+    destinationDirectory.set(rootProject.extra["targetFolder"] as File)
+
+    // Inclure tous les sous-projets dialectes
+    dependsOn(project(":dialects").subprojects.map { it.tasks.jar })
+    from(project(":dialects").subprojects.map { it.tasks.jar })
+
+    // Fusionner les META-INF/services automatiquement
+    mergeServiceFiles()
+}
+
+tasks.jar {
+    archiveClassifier.set("core")
     destinationDirectory.set(rootProject.extra["targetFolder"] as File)
 }
 

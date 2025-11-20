@@ -1,14 +1,15 @@
 package fr.traqueur.victor;
 
+import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
+import fr.traqueur.victor.registries.DialectRegistry;
 import fr.traqueur.victor.scanner.EntityScanner;
-import fr.traqueur.victor.types.VictorDialect;
 
 import java.util.*;
 
 public final class VictorBuilder {
 
-    private VictorDialect dialect;
+    private Dialect dialect;
     private String host;
     private int port;
     private String database;
@@ -20,34 +21,32 @@ public final class VictorBuilder {
     private boolean showSql = false;
     private final Properties properties = new Properties();
     private final Set<Class<?>> entityClasses = new HashSet<>();
-    private boolean autoScanEntities = false;
-    private String[] scanPackages = new String[0];
 
     public VictorBuilder sqlite() {
-        this.dialect = VictorDialect.SQLITE;
+        this.dialect = DialectRegistry.getInstance().getByName("sqlite");
         return this;
     }
 
     public VictorBuilder mysql() {
-        this.dialect = VictorDialect.MYSQL;
+        this.dialect = DialectRegistry.getInstance().getByName("mysql");
         this.port = 3306;
         return this;
     }
 
     public VictorBuilder postgresql() {
-        this.dialect = VictorDialect.POSTGRESQL;
+        this.dialect = DialectRegistry.getInstance().getByName("postgresql");
         this.port = 5432;
         return this;
     }
 
     public VictorBuilder mariadb() {
-        this.dialect = VictorDialect.MARIADB;
+        this.dialect = DialectRegistry.getInstance().getByName("mariadb");
         this.port = 3306;
         return this;
     }
 
     public VictorBuilder h2() {
-        this.dialect = VictorDialect.H2;
+        this.dialect = DialectRegistry.getInstance().getByName("h2");
         return this;
     }
 
@@ -113,40 +112,26 @@ public final class VictorBuilder {
     }
 
     public VictorBuilder autoScanEntities() {
-        this.autoScanEntities = true;
+        this.entityClasses.addAll(EntityScanner.scanForEntities());
         return this;
     }
 
     public VictorBuilder autoScanEntities(String... packages) {
-        this.autoScanEntities = true;
-        this.scanPackages = packages;
+        for (String aPackage : packages) {
+            this.entityClasses.addAll(EntityScanner.scanForEntities(aPackage));
+        }
         return this;
     }
 
     public VictorBuilder autoDetectDialect() {
         if (customUrl != null) {
-            this.dialect = VictorDialect.fromJdbcUrl(customUrl);
+            this.dialect = DialectRegistry.getInstance().detectFromUrl(customUrl);
         }
         return this;
     }
 
     public Victor build() {
         validate();
-
-        // Auto-scan entities if enabled
-        if (autoScanEntities) {
-            System.out.println("Auto-scanning for entities...");
-            Set<Class<?>> discoveredEntities;
-
-            if (scanPackages.length > 0) {
-                discoveredEntities = EntityScanner.scanPackages(scanPackages);
-            } else {
-                discoveredEntities = EntityScanner.scanForEntities();
-            }
-
-            entityClasses.addAll(discoveredEntities);
-            System.out.println("Auto-discovered " + discoveredEntities.size() + " entities");
-        }
 
         VictorConfiguration config = createConfiguration();
         VictorEngine engine = new VictorEngine(config);
@@ -164,18 +149,16 @@ public final class VictorBuilder {
         }
 
         if (customUrl == null) {
-            // Pour les bases embarquées, vérifier file OU database
             if (dialect.isEmbedded()) {
                 if (file == null && database == null) {
-                    throw new VictorConfigurationException("File or database name must be specified for " + dialect);
+                    throw new VictorConfigurationException("File or database name must be specified for " + dialect.getName());
                 }
             } else {
-                // Pour les bases non-embarquées, host est obligatoire
                 if (host == null) {
-                    throw new VictorConfigurationException("Host must be specified for " + dialect);
+                    throw new VictorConfigurationException("Host must be specified for " + dialect.getName());
                 }
                 if (database == null) {
-                    throw new VictorConfigurationException("Database name required for " + dialect);
+                    throw new VictorConfigurationException("Database name required for " + dialect.getName());
                 }
             }
         }
@@ -200,14 +183,11 @@ public final class VictorBuilder {
         if (customUrl != null) {
             return customUrl;
         }
-
-        return switch (dialect) {
-            case SQLITE -> "jdbc:sqlite:" + file;
-            case H2 -> file != null ? "jdbc:h2:" + file : "jdbc:h2:mem:" + database;
-            case MYSQL -> String.format("jdbc:mysql://%s:%d/%s?useSSL=false&serverTimezone=UTC",
-                    host, port, database);
-            case MARIADB -> String.format("jdbc:mariadb://%s:%d/%s", host, port, database);
-            case POSTGRESQL -> String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
-        };
+        if (dialect.isEmbedded()) {
+            String dbName = file != null ? file : database;
+            return dialect.buildConnectionUrl(null, 0, dbName, properties);
+        } else {
+            return dialect.buildConnectionUrl(host, port, database, properties);
+        }
     }
 }

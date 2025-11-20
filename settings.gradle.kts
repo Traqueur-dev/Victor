@@ -9,7 +9,10 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-include("dialects")
+
+
+include(":dialects")
+
 file("dialects").listFiles()?.forEach { file ->
     if (file.isDirectory and !file.name.equals("build") && !file.name.equals("src")) {
         println("Include dialects:${file.name}")
