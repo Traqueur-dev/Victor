@@ -18,6 +18,10 @@ public final class SqlExecutor {
         this.dialect = dialect;
     }
 
+    public boolean isShowSql() {
+        return connectionManager.getConfiguration().showSql();
+    }
+
     // ========== Méthodes originales préservées ==========
 
     /**
