@@ -62,6 +62,25 @@ public final class SqlExecutor {
         }
     }
 
+    public int executeUpsert(String sql, Object[] params) {
+        if (connectionManager.getConfiguration().showSql()) {
+            System.out.println("SQL (UPSERT): " + sql);
+        }
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            if (params != null) {
+                setParameters(stmt, params);
+            }
+
+            return stmt.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new VictorException("Failed to execute upsert: " + sql, e);
+        }
+    }
+
     /**
      * Execute EXISTS check using dialect
      */

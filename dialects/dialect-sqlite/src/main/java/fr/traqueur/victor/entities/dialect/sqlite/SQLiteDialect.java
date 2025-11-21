@@ -144,6 +144,33 @@ public class SQLiteDialect implements Dialect {
     }
 
     @Override
+    public String generateUpsert(EntityMetadata metadata) {
+        var allFields = metadata.getFields();
+        var nonIdFields = metadata.getNonIdFields();
+
+        String insertColumns = allFields.stream()
+                .map(f -> quoteIdentifier(f.getColumnName()))
+                .collect(Collectors.joining(", "));
+
+        String insertPlaceholders = allFields.stream()
+                .map(f -> "?")
+                .collect(Collectors.joining(", "));
+
+        String updateSetClause = nonIdFields.stream()
+                .map(f -> quoteIdentifier(f.getColumnName()) + " = excluded." + quoteIdentifier(f.getColumnName()))
+                .collect(Collectors.joining(", "));
+
+        return String.format(
+                "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT(%s) DO UPDATE SET %s",
+                getFullTableName(metadata),
+                insertColumns,
+                insertPlaceholders,
+                quoteIdentifier(metadata.getIdField().getColumnName()),
+                updateSetClause
+        );
+    }
+
+    @Override
     public String generateDelete(EntityMetadata metadata) {
         return String.format("DELETE FROM %s WHERE %s = ?",
                 getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));

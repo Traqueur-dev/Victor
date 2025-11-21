@@ -23,6 +23,8 @@ public interface Dialect {
 
     String generateUpdate(EntityMetadata metadata);
 
+    String generateUpsert(EntityMetadata metadata);
+
     String generateDelete(EntityMetadata metadata);
 
     String generateSelectById(EntityMetadata metadata);

@@ -197,6 +197,32 @@ public class MySQLDialect implements Dialect {
     }
 
     @Override
+    public String generateUpsert(EntityMetadata metadata) {
+        var allFields = metadata.getFields();
+        var nonIdFields = metadata.getNonIdFields();
+
+        String insertColumns = allFields.stream()
+                .map(f -> quoteIdentifier(f.getColumnName()))
+                .collect(Collectors.joining(", "));
+
+        String insertPlaceholders = allFields.stream()
+                .map(f -> "?")
+                .collect(Collectors.joining(", "));
+
+        String updateSetClause = nonIdFields.stream()
+                .map(f -> quoteIdentifier(f.getColumnName()) + " = VALUES(" + quoteIdentifier(f.getColumnName()) + ")")
+                .collect(Collectors.joining(", "));
+
+        return String.format(
+                "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+                getFullTableName(metadata),
+                insertColumns,
+                insertPlaceholders,
+                updateSetClause
+        );
+    }
+
+    @Override
     public String generateDelete(EntityMetadata metadata) {
         return String.format("DELETE FROM %s WHERE %s = ?",
                 getFullTableName(metadata),

@@ -143,6 +143,27 @@ public class H2Dialect implements Dialect {
     }
 
     @Override
+    public String generateUpsert(EntityMetadata metadata) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("MERGE INTO ").append(getFullTableName(metadata));
+
+        var allFields = metadata.getFields();
+        String columns = allFields.stream()
+                .map(f -> quoteIdentifier(f.getColumnName()))
+                .collect(Collectors.joining(", "));
+
+        String placeholders = allFields.stream()
+                .map(f -> "?")
+                .collect(Collectors.joining(", "));
+
+        sql.append(" (").append(columns).append(")")
+                .append(" KEY(").append(quoteIdentifier(metadata.getIdField().getColumnName())).append(")")
+                .append(" VALUES (").append(placeholders).append(")");
+
+        return sql.toString();
+    }
+
+    @Override
     public String generateDelete(EntityMetadata metadata) {
         return String.format("DELETE FROM %s WHERE %s = ?",
             getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
