@@ -23,6 +23,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     private final Class<ID> idClass;
     private final SqlExecutor sqlExecutor;
     private final Dialect dialect;
+    private final Repository<DTO, MODEL, ID> repository;
 
     @SuppressWarnings("unchecked")
     public ServiceProxyHandler(Class<?> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
@@ -32,6 +33,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         this.idClass = (Class<ID>) typeInfo.idClass();
         this.sqlExecutor = sqlExecutor;
         this.dialect = dialect;
+        this.repository = createRepository();
     }
 
     @Override
@@ -56,22 +58,32 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         };
     }
 
+    @SuppressWarnings("unchecked")
+    private Repository<DTO, MODEL, ID> createRepository() {
+        ClassLoader classLoader = Repository.class.getClassLoader();
+        Class<?>[] interfaces = new Class<?>[] { Repository.class };
+
+
+        RepositoryProxyHandler<DTO, MODEL, ID> handler =
+                new RepositoryProxyHandler<>(dtoClass, modelClass, idClass, sqlExecutor, dialect);
+
+        return (Repository<DTO, MODEL, ID>) Proxy.newProxyInstance(
+                classLoader,
+                interfaces,
+                handler
+        );
+    }
+
     private MODEL save(MODEL model) {
-        // Validation et hooks inchangés
         model.beforeSave();
         if (!isValid(model)) {
             throw new VictorException("Invalid model: " + model);
         }
 
-        // ✅ CHANGEMENT: Vraie logique de sauvegarde via repository
         try {
-            // Convert model to DTO
             DTO dto = VictorConverter.modelToDto(model, dtoClass);
 
-            // Save via repository
             DTO savedDto = repository().save(dto);
-
-            // Convert back to model
             MODEL savedModel = VictorConverter.dtoToModel(savedDto, modelClass);
 
             savedModel.afterSave();
@@ -188,7 +200,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private Repository<DTO, MODEL, ID> repository() {
-        throw new VictorException("Direct repository access is not supported in service proxy");
+        return repository;
     }
 
     @SuppressWarnings("unchecked")

@@ -40,6 +40,15 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         this.dialect = dialect;
     }
 
+    public RepositoryProxyHandler(Class<DTO> dtoClass, Class<MODEL> modelClass, Class<ID> idClass,
+                                  SqlExecutor sqlExecutor, Dialect dialect) {
+        this.dtoClass = dtoClass;
+        this.idClass = idClass;
+        this.entityMetadata = EntityMetadataRegistry.getInstance().getMetadata(modelClass);
+        this.sqlExecutor = sqlExecutor;
+        this.dialect = dialect;
+    }
+
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) {
         String methodName = method.getName();
