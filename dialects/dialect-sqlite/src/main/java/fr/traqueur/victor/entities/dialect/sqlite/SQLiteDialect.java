@@ -257,6 +257,12 @@ public class SQLiteDialect implements Dialect {
     public String getAutoIncrementSyntax(Class<?> idType) {
         return "AUTOINCREMENT";
     }
+
+    @Override
+    public String generateListTablesSQL(String schemaName) {
+        return "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+    }
+
     private String getFullTableName(EntityMetadata metadata) {
         return quoteIdentifier(metadata.getTableName());
     }

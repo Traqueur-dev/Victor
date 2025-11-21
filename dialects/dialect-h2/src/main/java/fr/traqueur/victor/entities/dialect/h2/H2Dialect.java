@@ -250,6 +250,18 @@ public class H2Dialect implements Dialect {
     }
 
     @Override
+    public String generateListTablesSQL(String schemaName) {
+        if (schemaName != null) {
+            return String.format(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_TYPE = 'TABLE'",
+                    schemaName.toUpperCase()
+            );
+        } else {
+            return "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'TABLE'";
+        }
+    }
+
+    @Override
     public String[] getConnectionSetupSql() {
         return new String[]{
             "SET MODE MySQL", // MySQL compatibility

@@ -328,6 +328,18 @@ public class MySQLDialect implements Dialect {
         return "AUTO_INCREMENT";
     }
 
+    @Override
+    public String generateListTablesSQL(String schemaName) {
+        if (schemaName != null) {
+            return String.format(
+                    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_TYPE = 'BASE TABLE'",
+                    schemaName
+            );
+        } else {
+            return "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'";
+        }
+    }
+
     private String getFullTableName(EntityMetadata metadata) {
         if (metadata.getSchema() != null) {
             return quoteIdentifier(metadata.getSchema()) + "." +

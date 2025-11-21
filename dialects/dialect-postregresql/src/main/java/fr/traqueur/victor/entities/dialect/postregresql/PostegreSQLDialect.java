@@ -341,4 +341,16 @@ public class PostegreSQLDialect implements Dialect {
             return "SERIAL";
         }
     }
+
+    @Override
+    public String generateListTablesSQL(String schemaName) {
+        if (schemaName != null) {
+            return String.format(
+                    "SELECT tablename FROM pg_tables WHERE schemaname = '%s'",
+                    schemaName.toLowerCase()
+            );
+        } else {
+            return "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
+        }
+    }
 }

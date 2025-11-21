@@ -8,6 +8,7 @@ import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.registries.EntityMetadataRegistry;
 import fr.traqueur.victor.scanner.EntityScanner;
 
+import java.util.Objects;
 import java.util.Set;
 
 public final class AutoMigration {
@@ -55,12 +56,17 @@ public final class AutoMigration {
         String tableName = metadata.getTableName().toLowerCase();
 
         if (existingTables.contains(tableName)) {
-            System.out.println("Table already exists: " + tableName);
+            if (configuration.showSql()) {
+                System.out.println("Table already exists: " + tableName);
+            }
             return;
         }
 
         createTable(metadata);
-        System.out.println("Created table: " + tableName);
+
+        if (configuration.showSql()) {
+            System.out.println("✓ Created table: " + tableName);
+        }
     }
 
     private void createTable(EntityMetadata metadata) {
@@ -88,41 +94,52 @@ public final class AutoMigration {
     }
 
     private Set<String> getExistingTables() {
-        // Cette méthode devrait être implémentée selon le dialecte
-        // Pour l'instant, on retourne un set vide pour simplifier
         try {
             return queryExistingTables();
         } catch (Exception e) {
-            System.out.println("Warning: Could not query existing tables: " + e.getMessage());
+            System.err.println("Warning: Could not query existing tables: " + e.getMessage());
+            if (configuration.showSql()) {
+                e.printStackTrace();
+            }
             return Set.of();
         }
     }
 
     private Set<String> queryExistingTables() {
-        // Cette logique devrait être déplacée dans chaque dialecte
-        // Car chaque SGBD a sa propre façon de lister les tables
+        String schemaName = determineSchemaForTableListing();
+        String sql = dialect.generateListTablesSQL(schemaName);
 
-        String sql = getListTablesSQL();
-        if (sql == null) {
-            return Set.of();
+        if (configuration.showSql()) {
+            System.out.println("Querying existing tables with schema: " +
+                    (schemaName != null ? schemaName : "default"));
         }
 
-        try {
-            // Implementation simplifiée - devrait utiliser SqlExecutor avec une méthode dédiée
-            return Set.of(); // Pour l'instant
-        } catch (Exception e) {
-            return Set.of();
+        Set<String> tables = sqlExecutor.executeQueryForStringSet(sql);
+
+        if (configuration.showSql()) {
+            System.out.println("Found " + tables.size() + " existing tables: " + tables);
         }
+
+        return tables;
     }
 
-    private String getListTablesSQL() {
-        // Cette méthode devrait être dans l'interface Dialect
-        return switch (dialect.getName().toLowerCase()) {
-            case "h2" -> "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'TABLE'";
-            case "sqlite" -> "SELECT name FROM sqlite_master WHERE type='table'";
-            case "mysql", "mariadb" -> "SHOW TABLES";
-            case "postgresql" -> "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
-            default -> null;
-        };
+    private String determineSchemaForTableListing() {
+        var schemas = configuration.entityClasses().stream()
+                .map(clazz -> {
+                    try {
+                        var metadata = EntityMetadataRegistry.getInstance().getMetadata(clazz);
+                        return metadata.getSchema();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        if (schemas.size() == 1) {
+            return schemas.iterator().next();
+        }
+
+        return null;
     }
 }

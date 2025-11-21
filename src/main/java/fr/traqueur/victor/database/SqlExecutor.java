@@ -81,6 +81,31 @@ public final class SqlExecutor {
         }
     }
 
+    public Set<String> executeQueryForStringSet(String sql) {
+        if (connectionManager.getConfiguration().showSql()) {
+            System.out.println("SQL: " + sql);
+        }
+
+        Set<String> results = new HashSet<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                String value = rs.getString(1);
+                if (value != null) {
+                    results.add(value.toLowerCase());
+                }
+            }
+
+            return results;
+
+        } catch (SQLException e) {
+            throw new VictorException("Failed to execute query for string set: " + sql, e);
+        }
+    }
+
     /**
      * Execute EXISTS check using dialect
      */

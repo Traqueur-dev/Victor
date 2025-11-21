@@ -51,6 +51,8 @@ public interface Dialect {
 
     String getAutoIncrementSyntax(Class<?> idType);
 
+    String generateListTablesSQL(String schemaName);
+
     default String generateCreateSchema(String schemaName) {
         if (supportsSchemas()) {
             return "CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(schemaName);
