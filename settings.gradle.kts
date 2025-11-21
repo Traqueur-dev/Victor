@@ -21,3 +21,4 @@ file("dialects").listFiles()?.forEach { file ->
 }
 
 include("dialects:dialect-mysql")
+include("dialects:dialect-postregresql")
