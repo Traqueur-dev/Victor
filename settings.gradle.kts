@@ -19,3 +19,5 @@ file("dialects").listFiles()?.forEach { file ->
         include(":dialects:${file.name}")
     }
 }
+
+include("dialects:dialect-mysql")
