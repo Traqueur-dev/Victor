@@ -1,6 +1,7 @@
-package fr.traqueur.victor.database;
+package fr.traqueur.victor.managers;
 
 import fr.traqueur.victor.VictorConfiguration;
+import fr.traqueur.victor.entities.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.sql.Connection;
@@ -39,13 +40,16 @@ public final class ConnectionManager {
     public Connection getConnection() {
         checkNotClosed();
 
+        Connection transactionalConnection = TransactionContext.getCurrentConnection();
+        if (transactionalConnection != null) {
+            return transactionalConnection;
+        }
+
         try {
             Connection conn = DriverManager.getConnection(jdbcUrl, connectionProperties);
 
-            // Configure connection
             conn.setAutoCommit(true);
 
-            // Execute dialect-specific setup SQL
             String[] setupSql = configuration.dialect().getConnectionSetupSql();
             if (setupSql.length > 0) {
                 try (var stmt = conn.createStatement()) {

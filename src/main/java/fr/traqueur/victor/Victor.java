@@ -2,15 +2,21 @@ package fr.traqueur.victor;
 
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.Service;
+import fr.traqueur.victor.entities.transaction.Transaction;
+import fr.traqueur.victor.entities.transaction.TransactionalCallable;
+import fr.traqueur.victor.entities.transaction.TransactionalOperation;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.managers.TransactionManager;
 
 public final class Victor {
 
     private static Victor defaultInstance;
     private final VictorEngine engine;
+    private final TransactionManager transactionManager;
 
     private Victor(VictorEngine engine) {
         this.engine = engine;
+        this.transactionManager = engine.getTransactionManager();
     }
 
     public static <T> T with(Class<T> interfaceClass) {
@@ -23,6 +29,26 @@ public final class Victor {
 
     public static <T extends Service<?, ?, ?>> T withService(Class<T> serviceClass) {
         return getDefaultOrThrow().createService(serviceClass);
+    }
+
+    public Transaction beginTransaction() {
+        return transactionManager.beginTransaction();
+    }
+
+    public void transaction(TransactionalOperation operation) {
+        transactionManager.executeInTransaction(operation);
+    }
+
+    public <T> T transaction(TransactionalCallable<T> callable) {
+        return transactionManager.executeInTransaction(callable);
+    }
+
+    public static void withTransaction(TransactionalOperation operation) {
+        getDefaultOrThrow().transaction(operation);
+    }
+
+    public static <T> T withTransaction(TransactionalCallable<T> callable) {
+        return getDefaultOrThrow().transaction(callable);
     }
 
     public static void connect(String jdbcUrl) {

@@ -2,11 +2,12 @@ package fr.traqueur.victor;
 
 import fr.traqueur.victor.database.migration.AutoMigration;
 import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.database.ConnectionManager;
+import fr.traqueur.victor.managers.ConnectionManager;
 import fr.traqueur.victor.database.SqlExecutor;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.Service;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.managers.TransactionManager;
 import fr.traqueur.victor.proxy.RepositoryProxyHandler;
 import fr.traqueur.victor.proxy.ServiceProxyHandler;
 
@@ -15,6 +16,7 @@ public final class VictorEngine {
     private final VictorConfiguration configuration;
     private final Dialect dialect;
     private final ConnectionManager connectionManager;
+    private final TransactionManager transactionManager;
     private final SqlExecutor sqlExecutor;
     private boolean closed = false;
 
@@ -25,6 +27,8 @@ public final class VictorEngine {
         // Initialize components using the dialect interface
         this.connectionManager = ConnectionManager.getInstance(configuration);
         this.sqlExecutor = new SqlExecutor(connectionManager, dialect);
+
+        this.transactionManager = new TransactionManager(connectionManager);
 
         System.out.println("Victor Engine initialized with dialect: " + dialect.getName());
         if (configuration.showSql()) {
@@ -80,6 +84,10 @@ public final class VictorEngine {
 
     public VictorConfiguration getConfiguration() {
         return configuration;
+    }
+
+    public TransactionManager getTransactionManager() {
+        return transactionManager;
     }
 
     public Dialect getDialect() {

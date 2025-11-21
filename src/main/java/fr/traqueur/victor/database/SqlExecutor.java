@@ -3,9 +3,16 @@ package fr.traqueur.victor.database;
 import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
+import fr.traqueur.victor.entities.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.managers.ConnectionManager;
 
+import java.math.BigDecimal;
 import java.sql.*;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 
 public final class SqlExecutor {
@@ -32,13 +39,21 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             Statement stmt = conn.createStatement()) {
+        Connection conn = null;
+        Statement stmt = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.createStatement();
 
             stmt.execute(sql);
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute DDL: " + sql, e);
+        } finally {
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -52,9 +67,13 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
+            rs = stmt.executeQuery();
 
             if (rs.next()) {
                 return rs.getLong(1);
@@ -63,6 +82,14 @@ public final class SqlExecutor {
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute count query: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -71,8 +98,11 @@ public final class SqlExecutor {
             System.out.println("SQL (UPSERT): " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             if (params != null) {
                 setParameters(stmt, params);
@@ -82,6 +112,11 @@ public final class SqlExecutor {
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute upsert: " + sql, e);
+        } finally {
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -91,10 +126,13 @@ public final class SqlExecutor {
         }
 
         Set<String> results = new HashSet<>();
-
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
+            rs = stmt.executeQuery();
 
             while (rs.next()) {
                 String value = rs.getString(1);
@@ -107,6 +145,14 @@ public final class SqlExecutor {
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query for string set: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -120,17 +166,28 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             stmt.setObject(1, id);
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
-            }
+            rs = stmt.executeQuery();
+            return rs.next();
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute exists query: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -144,8 +201,11 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             stmt.setObject(1, id);
 
@@ -156,23 +216,26 @@ public final class SqlExecutor {
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute delete: " + sql, e);
+        } finally {
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
-    // ========== Nouvelles méthodes pour compatibilité RepositoryProxyHandler ==========
-
-    /**
-     * Execute INSERT with generated key - Version RepositoryProxyHandler
-     */
     public <T> T executeInsertWithGeneratedKey(String sql, Object[] params, Class<T> idType) {
         if (connectionManager.getConfiguration().showSql()) {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
 
-            // Set parameters
             setParameters(stmt, params);
 
             int rowsAffected = stmt.executeUpdate();
@@ -180,16 +243,22 @@ public final class SqlExecutor {
                 throw new VictorException("Insert failed, no rows affected");
             }
 
-            // Get generated key
-            try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next()) {
-                    return rs.getObject(1, idType);
-                }
-                throw new VictorException("Insert failed, no generated key returned");
+            rs = stmt.getGeneratedKeys();
+            if (rs.next()) {
+                return rs.getObject(1, idType);
             }
+            throw new VictorException("Insert failed, no generated key returned");
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute insert: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -201,8 +270,11 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             if (params != null) {
                 setParameters(stmt, params);
@@ -212,6 +284,11 @@ public final class SqlExecutor {
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute update: " + sql, e);
+        } finally {
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
@@ -223,196 +300,110 @@ public final class SqlExecutor {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                List<T> results = new ArrayList<>();
-                while (rs.next()) {
-                    results.add(mapper.map(rs));
-                }
-                return results;
+            rs = stmt.executeQuery();
+            List<T> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(mapper.map(rs));
             }
+            return results;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
-    /**
-     * Execute SELECT query returning single result - Version RepositoryProxyHandler
-     */
     public <T> T executeQuerySingle(String sql, Object[] params, RowMapper<T> mapper) {
         if (connectionManager.getConfiguration().showSql()) {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapper.map(rs);
-                }
-                return null;
+            rs = stmt.executeQuery();
+            if (rs.next()) {
+                return mapper.map(rs);
             }
+            return null;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query single: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
 
-    /**
-     * Execute COUNT query with parameters - Version RepositoryProxyHandler
-     */
     public long executeCount(String sql, Object[] params) {
         if (connectionManager.getConfiguration().showSql()) {
             System.out.println("SQL: " + sql);
         }
 
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = connectionManager.getConnection();
+            stmt = conn.prepareStatement(sql);
 
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getLong(1);
-                }
-                return 0;
+            rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getLong(1);
             }
+            return 0;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute count: " + sql, e);
+        } finally {
+            if (rs != null) {
+                try { rs.close(); } catch (SQLException ignored) {}
+            }
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException ignored) {}
+            }
+            closeConnectionIfNotTransactional(conn);
         }
     }
-
-    // ========== Méthodes originales préservées ==========
-
-    /**
-     * Execute INSERT with generated key using dialect - Version originale
-     */
-    public <T> T executeInsertWithGeneratedKey(EntityMetadata metadata, Object dto, Class<T> idType) {
-        String sql = dialect.generateInsert(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
-        }
-
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-            // Set parameters from DTO (exclude ID field)
-            setInsertParameters(stmt, metadata, dto);
-
-            int rowsAffected = stmt.executeUpdate();
-            if (rowsAffected == 0) {
-                throw new VictorException("Insert failed, no rows affected");
-            }
-
-            // Get generated key
-            try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next()) {
-                    return rs.getObject(1, idType);
-                }
-                throw new VictorException("Insert failed, no generated key returned");
-            }
-
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute insert: " + sql, e);
-        }
-    }
-
-    /**
-     * Execute SELECT by ID using dialect - Version originale
-     */
-    public <T> Optional<T> executeSelectById(EntityMetadata metadata, Object id, Class<T> resultType) {
-        String sql = dialect.generateSelectById(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
-        }
-
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setObject(1, id);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapResultToDto(rs, metadata, resultType));
-                }
-                return Optional.empty();
-            }
-
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute select by ID: " + sql, e);
-        }
-    }
-
-    /**
-     * Execute SELECT ALL using dialect - Version originale
-     */
-    public <T> List<T> executeSelectAll(EntityMetadata metadata, Class<T> resultType) {
-        String sql = dialect.generateSelectAll(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
-        }
-
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            List<T> results = new ArrayList<>();
-            while (rs.next()) {
-                results.add(mapResultToDto(rs, metadata, resultType));
-            }
-            return results;
-
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute select all: " + sql, e);
-        }
-    }
-
-    // ========== Helper Methods ==========
 
     private void setParameters(PreparedStatement stmt, Object[] params) throws SQLException {
         for (int i = 0; i < params.length; i++) {
             stmt.setObject(i + 1, params[i]);
-        }
-    }
-
-    private void setInsertParameters(PreparedStatement stmt, EntityMetadata metadata, Object dto) throws SQLException {
-        var nonIdFields = metadata.getNonIdFields();
-        int paramIndex = 1;
-
-        for (FieldMetadata field : nonIdFields) {
-            Object value = field.getValue(dto);
-            stmt.setObject(paramIndex++, value);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T mapResultToDto(ResultSet rs, EntityMetadata metadata, Class<T> resultType) throws SQLException {
-        try {
-            if (resultType.isRecord()) {
-                return mapResultToRecord(rs, metadata, resultType);
-            } else {
-                return mapResultToClass(rs, metadata, resultType);
-            }
-        } catch (Exception e) {
-            throw new VictorException("Failed to map result to " + resultType.getSimpleName(), e);
         }
     }
 
@@ -437,27 +428,12 @@ public final class SqlExecutor {
         return (T) constructor.newInstance(args);
     }
 
-    @SuppressWarnings("unchecked")
-    private <T> T mapResultToClass(ResultSet rs, EntityMetadata metadata, Class<T> clazz) throws Exception {
-        T instance = clazz.getDeclaredConstructor().newInstance();
-
-        for (FieldMetadata field : metadata.getFields()) {
-            Object value = rs.getObject(field.getColumnName());
-            field.setValue(instance, value);
-        }
-
-        return instance;
-    }
 
     public Dialect getDialect() {
         return dialect;
     }
 
-    // ✅ AJOUT: Méthode getFieldValue manquante
-    /**
-     * Extract field value from ResultSet using FieldMetadata
-     */
-    public Object getFieldValue(ResultSet rs, FieldMetadata fieldMetadata) throws SQLException {
+    public Object getFieldValue(ResultSet rs, FieldMetadata fieldMetadata) {
         String columnName = fieldMetadata.getColumnName();
         Class<?> javaType = fieldMetadata.getJavaType();
 
@@ -486,22 +462,22 @@ public final class SqlExecutor {
             } else if (javaType == Byte.class || javaType == byte.class) {
                 byte value = rs.getByte(columnName);
                 return rs.wasNull() ? null : value;
-            } else if (javaType == java.math.BigDecimal.class) {
+            } else if (javaType == BigDecimal.class) {
                 return rs.getBigDecimal(columnName);
-            } else if (javaType == java.time.LocalDateTime.class) {
+            } else if (javaType == LocalDateTime.class) {
                 var timestamp = rs.getTimestamp(columnName);
                 return timestamp != null ? timestamp.toLocalDateTime() : null;
-            } else if (javaType == java.time.LocalDate.class) {
+            } else if (javaType == LocalDate.class) {
                 var date = rs.getDate(columnName);
                 return date != null ? date.toLocalDate() : null;
-            } else if (javaType == java.time.LocalTime.class) {
+            } else if (javaType == LocalTime.class) {
                 var time = rs.getTime(columnName);
                 return time != null ? time.toLocalTime() : null;
-            } else if (javaType == java.sql.Timestamp.class) {
+            } else if (javaType == Timestamp.class) {
                 return rs.getTimestamp(columnName);
-            } else if (javaType == java.sql.Date.class) {
+            } else if (javaType == Date.class) {
                 return rs.getDate(columnName);
-            } else if (javaType == java.sql.Time.class) {
+            } else if (javaType == Time.class) {
                 return rs.getTime(columnName);
             } else if (javaType == byte[].class) {
                 return rs.getBytes(columnName);
@@ -512,6 +488,18 @@ public final class SqlExecutor {
         } catch (SQLException e) {
             throw new VictorException("Failed to extract field value for column " + columnName +
                     " of type " + javaType.getSimpleName(), e);
+        }
+    }
+
+    private void closeConnectionIfNotTransactional(Connection connection) {
+        try {
+            if (TransactionContext.getCurrentConnection() != connection) {
+                if (connection != null && !connection.isClosed()) {
+                    connection.close();
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Warning: Failed to close connection: " + e.getMessage());
         }
     }
 
