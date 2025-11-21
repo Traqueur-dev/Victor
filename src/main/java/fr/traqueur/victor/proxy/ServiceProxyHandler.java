@@ -4,6 +4,7 @@ import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.conversion.VictorConverter;
+import fr.traqueur.victor.entities.Service;
 import fr.traqueur.victor.reflections.TypeResolver;
 import fr.traqueur.victor.database.SqlExecutor;
 import fr.traqueur.victor.entities.dialect.Dialect; // ✅ CHANGEMENT: Ajout du Dialect
@@ -26,16 +27,21 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     private final Repository<DTO, MODEL, ID> repository;
 
     @SuppressWarnings("unchecked")
-    public ServiceProxyHandler(Class<?> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public ServiceProxyHandler(Class<? extends Service<?,?,?>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
         this.modelClass = (Class<MODEL>) typeInfo.modelClass();
         this.dtoClass = (Class<DTO>) typeInfo.dtoClass();
         this.idClass = (Class<ID>) typeInfo.idClass();
         this.sqlExecutor = sqlExecutor;
         this.dialect = dialect;
-        this.repository = createRepository();
+        Class<? extends Repository<DTO, MODEL, ID>> repositoryInterface = (Class<? extends Repository<DTO, MODEL, ID>>) TypeResolver.resolveRepositoryForService(serviceInterface);
+        this.repository = RepositoryProxyHandler.createProxy(
+                repositoryInterface,
+                sqlExecutor,
+                dialect);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         String methodName = method.getName();
@@ -56,22 +62,6 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
             case "repository" -> repository();
             default -> throw new VictorException("Unsupported service method: " + methodName);
         };
-    }
-
-    @SuppressWarnings("unchecked")
-    private Repository<DTO, MODEL, ID> createRepository() {
-        ClassLoader classLoader = Repository.class.getClassLoader();
-        Class<?>[] interfaces = new Class<?>[] { Repository.class };
-
-
-        RepositoryProxyHandler<DTO, MODEL, ID> handler =
-                new RepositoryProxyHandler<>(dtoClass, modelClass, idClass, sqlExecutor, dialect);
-
-        return (Repository<DTO, MODEL, ID>) Proxy.newProxyInstance(
-                classLoader,
-                interfaces,
-                handler
-        );
     }
 
     private MODEL save(MODEL model) {
@@ -198,7 +188,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <T extends Service<?,?,?>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new ServiceProxyHandler<>(serviceInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 serviceInterface.getClassLoader(),

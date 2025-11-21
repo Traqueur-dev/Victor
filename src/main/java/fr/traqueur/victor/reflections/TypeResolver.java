@@ -1,9 +1,8 @@
 package fr.traqueur.victor.reflections;
 
+import fr.traqueur.victor.annotations.UseRepository;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.Service;
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.lang.reflect.ParameterizedType;
@@ -11,7 +10,15 @@ import java.lang.reflect.Type;
 
 public final class TypeResolver {
 
-    public static RepositoryTypeInfo resolveRepositoryTypes(Class<?> repositoryInterface) {
+    public static Class<?> resolveRepositoryForService(Class<? extends Service<?,?,?>> serviceInterface) {
+        if(serviceInterface.isAnnotationPresent(UseRepository.class)) {
+            UseRepository annotation = serviceInterface.getAnnotation(UseRepository.class);
+            return annotation.value();
+        }
+        return Repository.class;
+    }
+
+    public static RepositoryTypeInfo resolveRepositoryTypes(Class<? extends Repository<?,?,?>> repositoryInterface) {
         Type[] genericTypes = getGenericTypes(repositoryInterface, Repository.class);
 
         if (genericTypes.length >= 3) {
@@ -25,7 +32,7 @@ public final class TypeResolver {
                 ". Make sure your repository extends Repository<DTO, MODEL, ID>");
     }
 
-    public static ServiceTypeInfo resolveServiceTypes(Class<?> serviceInterface) {
+    public static ServiceTypeInfo resolveServiceTypes(Class<? extends Service<?,?,?>> serviceInterface) {
         Type[] genericTypes = getGenericTypes(serviceInterface, Service.class);
 
         if (genericTypes.length >= 3) {

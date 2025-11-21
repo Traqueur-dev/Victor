@@ -3,6 +3,7 @@ package fr.traqueur.victor.proxy;
 import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
+import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.exceptions.VictorEntityNotFoundException;
@@ -30,7 +31,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     private final Dialect dialect;
 
     @SuppressWarnings("unchecked")
-    public RepositoryProxyHandler(Class<?> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public RepositoryProxyHandler(Class<? extends Repository<?,?,?>> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveRepositoryTypes(repositoryInterface);
         this.dtoClass = (Class<DTO>) typeInfo.dtoClass();
         Class<MODEL> modelClass = (Class<MODEL>) typeInfo.modelClass();
@@ -304,7 +305,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T createProxy(Class<T> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <T extends Repository<?,?,?>> T createProxy(Class<T> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new RepositoryProxyHandler<>(repositoryInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 repositoryInterface.getClassLoader(),
