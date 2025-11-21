@@ -42,6 +42,10 @@ allprojects {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    tasks.withType<JavaCompile> {
+        options.compilerArgs.add("-parameters")
+    }
+
     tasks.test {
         useJUnitPlatform()
         testLogging {

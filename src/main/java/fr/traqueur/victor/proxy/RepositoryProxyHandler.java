@@ -2,6 +2,7 @@ package fr.traqueur.victor.proxy;
 
 import fr.traqueur.victor.database.query.DynamicQuerySqlGenerator;
 import fr.traqueur.victor.database.query.MethodNameParser;
+import fr.traqueur.victor.database.query.QueryAnnotationParser;
 import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
@@ -20,6 +21,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 
 public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID>
@@ -52,6 +56,11 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     public Object invoke(Object proxy, Method method, Object[] args) {
         String methodName = method.getName();
 
+        var parsedQuery = QueryAnnotationParser.parse(method);
+        if (parsedQuery != null) {
+            return handleCustomQuery(method, args, parsedQuery);
+        }
+
         return switch (methodName) {
             case "save" -> save((DTO) args[0]);
             case "findById" -> findById((ID) args[0]);
@@ -74,6 +83,94 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
                 throw new VictorException("Unsupported repository method: " + methodName);
             }
         };
+    }
+
+    /**
+     * Préprocesse la query SQL pour ajouter les quotes sur les identifiants.
+     *
+     * @param sql La query SQL brute
+     * @return La query avec les identifiants quotés selon le dialecte
+     */
+    private String preprocessSqlQuery(String sql) {
+        // Liste des mots-clés SQL à ne PAS quoter
+        Set<String> sqlKeywords = Set.of(
+                "SELECT", "FROM", "WHERE", "AND", "OR", "ORDER", "BY", "GROUP",
+                "HAVING", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON",
+                "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
+                "AS", "ASC", "DESC", "LIMIT", "OFFSET", "COUNT", "SUM", "AVG",
+                "MIN", "MAX", "DISTINCT", "NULL", "NOT", "IS", "IN", "BETWEEN",
+                "LIKE", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "END"
+        );
+
+        Pattern identifierPattern = Pattern.compile("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        Matcher matcher = identifierPattern.matcher(sql);
+        StringBuilder result = new StringBuilder();
+
+        while (matcher.find()) {
+            String identifier = matcher.group(1);
+            String upperIdentifier = identifier.toUpperCase();
+
+            // Si c'est un keyword SQL ou un nombre, ne pas quoter
+            if (sqlKeywords.contains(upperIdentifier) || identifier.matches("\\d+")) {
+                matcher.appendReplacement(result, identifier);
+            } else {
+                // Quoter avec le dialecte
+                matcher.appendReplacement(result, dialect.quoteIdentifier(identifier));
+            }
+        }
+        matcher.appendTail(result);
+
+        return result.toString();
+    }
+
+    private Object handleCustomQuery(Method method, Object[] args, QueryAnnotationParser.ParsedQueryAnnotation parsedQuery) {
+        try {
+            String sql = parsedQuery.toJdbcQuery();
+
+            sql = preprocessSqlQuery(sql);
+
+            Object[] params = QueryAnnotationParser.mapParameterValues(method, args, parsedQuery.namedParameters());
+
+            if (sqlExecutor.isShowSql()) {
+                System.out.println("Custom Query SQL: " + sql);
+                if (parsedQuery.hasNamedParameters()) {
+                    System.out.println("  Named parameters: " + parsedQuery.namedParameters());
+                }
+            }
+
+            // Exécuter selon le type de query
+            return switch (parsedQuery.queryType()) {
+                case SELECT -> executeCustomSelect(method, sql, params);
+                case COUNT -> sqlExecutor.executeCount(sql, params);
+                case UPDATE, DELETE, INSERT -> sqlExecutor.executeUpdate(sql, params);
+            };
+
+        } catch (Exception e) {
+            throw new VictorException("Failed to execute custom query for method: " + method.getName(), e);
+        }
+    }
+
+    private Object executeCustomSelect(Method method, String sql, Object[] params) {
+        Class<?> returnType = method.getReturnType();
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+
+        if (returnType == Optional.class) {
+            DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
+            return Optional.ofNullable(result);
+        }
+
+        if (List.class.isAssignableFrom(returnType)) {
+            return sqlExecutor.executeQuery(sql, params, mapper);
+        }
+
+        if (returnType.isAssignableFrom(dtoClass)) {
+            return sqlExecutor.executeQuerySingle(sql, params, mapper);
+        }
+
+        throw new VictorException(
+                "Unsupported return type for @Query method: " + returnType +
+                        ". Supported types: Optional<DTO>, List<DTO>, DTO"
+        );
     }
 
     private DTO save(DTO dto) {
@@ -116,18 +213,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         int rowsAffected = sqlExecutor.executeUpdate(sql, params);
         if (rowsAffected == 0) {
             throw new VictorException("UPSERT failed, no rows affected: " + model.getId());
-        }
-
-        return dto;
-    }
-
-    private DTO update(DTO dto, MODEL model) {
-        String sql = dialect.generateUpdate(entityMetadata);
-        Object[] params = extractAllFieldValues(model);
-
-        int rowsAffected = sqlExecutor.executeUpdate(sql, params);
-        if (rowsAffected == 0) {
-            throw new VictorException("Entity not found for update: " + model.getId());
         }
 
         return dto;

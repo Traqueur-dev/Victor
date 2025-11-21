@@ -28,8 +28,6 @@ class DynamicQueryTest {
             .entities(User.class)
             .build();
         
-        victor.runMigrations();
-        
         userRepository = victor.createRepository(UserRepository.class);
         
         // Insérer des données de test

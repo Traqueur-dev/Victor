@@ -1,5 +1,6 @@
 package fr.traqueur.victor.test.repository;
 
+import fr.traqueur.victor.annotations.Query;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.test.dto.UserDto;
 import fr.traqueur.victor.test.entities.User;
@@ -41,4 +42,23 @@ public interface UserRepository extends Repository<UserDto, User, Long> {
     
     // Test 11: Combinaison complexe
     List<UserDto> findByActiveAndAgeGreaterThanOrderByNameAsc(boolean active, int age);
+
+    @Query("SELECT * FROM users WHERE age > ? AND active = ?")
+    List<UserDto> findActiveUsersOlderThan(int age, boolean active);
+
+    // Query avec paramètres nommés
+    @Query("SELECT * FROM users WHERE username = :username")
+    Optional<UserDto> findByUsernameCustom(String username);
+
+    // Query de comptage
+    @Query("SELECT COUNT(*) FROM users WHERE active = :active")
+    long countByActive(boolean active);
+
+    // Query d'update
+    @Query("UPDATE users SET active = :active WHERE age < :maxAge")
+    int updateActiveByAge(boolean active, int maxAge);
+
+    // Query de delete
+    @Query("DELETE FROM users WHERE age < :minAge")
+    int deleteByAgeLessThan(int minAge);
 }
