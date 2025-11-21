@@ -11,15 +11,13 @@ public final class TransactionImpl implements Transaction {
     private boolean active;
     private boolean committed;
     private boolean rolledBack;
-    private final boolean autoCloseConnection;
 
-    public TransactionImpl(Connection connection, boolean autoCloseConnection) {
+    public TransactionImpl(Connection connection) {
         this.connection = connection;
-        this.autoCloseConnection = autoCloseConnection;
         this.active = true;
         this.committed = false;
         this.rolledBack = false;
-        
+
         try {
             connection.setAutoCommit(false);
         } catch (SQLException e) {
@@ -69,7 +67,7 @@ public final class TransactionImpl implements Transaction {
     public boolean isRolledBack() {
         return rolledBack;
     }
-    
+
     @Override
     public void close() {
         if (active) {
@@ -77,14 +75,14 @@ public final class TransactionImpl implements Transaction {
         }
 
         try {
-            connection.setAutoCommit(true);
-            
-            if (autoCloseConnection && !connection.isClosed()) {
-                connection.close();
+            if (!connection.isClosed()) {
+                connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.err.println("Warning: Failed to close transaction properly: " + e.getMessage());
+            System.err.println("Warning: Failed to restore auto-commit: " + e.getMessage());
         }
+
+        TransactionContext.clearCurrentTransaction();
     }
     
     /**

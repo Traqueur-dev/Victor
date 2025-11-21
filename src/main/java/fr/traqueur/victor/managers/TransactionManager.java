@@ -25,17 +25,15 @@ public final class TransactionManager {
     public Transaction beginTransaction() {
         if (TransactionContext.hasActiveTransaction()) {
             throw new VictorTransactionException(
-                "A transaction is already active in this thread. " +
-                "Nested transactions are not supported."
+                    "A transaction is already active in this thread. " +
+                            "Nested transactions are not supported."
             );
         }
-        
+
         Connection connection = connectionManager.getConnection();
-        TransactionImpl transaction = new TransactionImpl(connection, true);
-        
-        // Enregistrer dans le contexte thread-local
+        TransactionImpl transaction = new TransactionImpl(connection);
         TransactionContext.setCurrentTransaction(transaction);
-        
+
         return transaction;
     }
     
@@ -44,16 +42,11 @@ public final class TransactionManager {
      * Commit automatique si succès, rollback si exception.
      */
     public void executeInTransaction(TransactionalOperation operation) {
-        Transaction tx = beginTransaction();
-        try {
+        try (Transaction tx = beginTransaction()) {
             operation.execute();
             tx.commit();
         } catch (Exception e) {
-            tx.rollback();
             throw new VictorTransactionException("Transaction failed and was rolled back", e);
-        } finally {
-            tx.close();
-            TransactionContext.clearCurrentTransaction();
         }
     }
     
@@ -62,17 +55,12 @@ public final class TransactionManager {
      * Commit automatique si succès, rollback si exception.
      */
     public <T> T executeInTransaction(TransactionalCallable<T> callable) {
-        Transaction tx = beginTransaction();
-        try {
+        try (Transaction tx = beginTransaction()) {
             T result = callable.call();
             tx.commit();
             return result;
         } catch (Exception e) {
-            tx.rollback();
             throw new VictorTransactionException("Transaction failed and was rolled back", e);
-        } finally {
-            tx.close();
-            TransactionContext.clearCurrentTransaction();
         }
     }
 }

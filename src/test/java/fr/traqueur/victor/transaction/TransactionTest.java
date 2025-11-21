@@ -17,20 +17,28 @@ class TransactionTest {
     
     private static Victor victor;
     private static UserRepository userRepository;
-    
+
     @BeforeEach
     void setup() {
-        // Créer Victor avec H2 en mémoire
+        if (victor != null) {
+            try {
+                victor.close();
+            } catch (Exception ignored) {}
+        }
+
+        String dbName = "txtest_" + System.nanoTime();
+        System.out.println("\n[TEST] Creating new database: " + dbName);
+
         victor = Victor.configure()
-            .h2()
-            .database("txtest_" + System.currentTimeMillis()) // Base unique par test
-            .showSql()
-            .autoMigrate()
-            .entities(User.class)
-            .build();
-        
-        victor.runMigrations();
-        
+                .h2()
+                .database(dbName)
+                .showSql()
+                .autoMigrate()
+                .entities(User.class)
+                .property("DB_CLOSE_DELAY", "-1")
+                .property("DB_CLOSE_ON_EXIT", "TRUE")
+                .build();
+
         userRepository = victor.createRepository(UserRepository.class);
     }
     
@@ -130,37 +138,36 @@ class TransactionTest {
         System.out.println("✓ Transaction with return value successful");
         System.out.println("  Returned: " + savedUser);
     }
-    
+
     @Test
     @Order(4)
     void testManualTransaction() {
         System.out.println("\n--- Test 4: Manual Transaction ---");
-        
+
         Transaction tx = victor.beginTransaction();
         try {
             UserDto user1 = new UserDto(null, "manual1", "manual1@example.com", 25, true, "Manual One");
             userRepository.save(user1);
-            
+
             UserDto user2 = new UserDto(null, "manual2", "manual2@example.com", 30, true, "Manual Two");
             userRepository.save(user2);
-            
+
             System.out.println("✓ 2 users saved in manual transaction");
-            
-            // Commit manuel
+
             tx.commit();
             System.out.println("✓ Manual commit successful");
-            
+
         } catch (Exception e) {
             tx.rollback();
             throw e;
         } finally {
             tx.close();
         }
-        
-        // Vérifier que les données sont bien présentes
+
+        // Vérifier IMMÉDIATEMENT après la transaction
         long count = userRepository.count();
         assertEquals(2, count, "Should have 2 users after manual commit");
-        
+
         System.out.println("✓ Manual transaction completed");
     }
     
@@ -175,16 +182,14 @@ class TransactionTest {
             userRepository.save(user1);
             
             System.out.println("✓ User saved in manual transaction");
-            
-            // Rollback manuel
+
             tx.rollback();
             System.out.println("✓ Manual rollback executed");
             
         } finally {
             tx.close();
         }
-        
-        // Vérifier que les données ne sont pas présentes
+
         long count = userRepository.count();
         assertEquals(0, count, "Should have 0 users after manual rollback");
         

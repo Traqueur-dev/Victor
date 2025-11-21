@@ -27,7 +27,6 @@ public final class VictorEngine {
         // Initialize components using the dialect interface
         this.connectionManager = ConnectionManager.getInstance(configuration);
         this.sqlExecutor = new SqlExecutor(connectionManager, dialect);
-
         this.transactionManager = new TransactionManager(connectionManager);
 
         System.out.println("Victor Engine initialized with dialect: " + dialect.getName());
