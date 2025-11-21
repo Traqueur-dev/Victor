@@ -1,4 +1,4 @@
-package fr.traqueur.victor.dialect.h2;
+package fr.traqueur.victor.entities.dialect.h2;
 
 import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
