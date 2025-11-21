@@ -61,6 +61,14 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.19.0")
 }
 
+afterEvaluate {
+    project(":dialects").subprojects.forEach { dialectProject ->
+        dependencies {
+            testImplementation(dialectProject)
+        }
+    }
+}
+
 tasks.register("generateVersionProperties") {
     doLast {
         val name = project.name.lowercase(Locale.getDefault())
