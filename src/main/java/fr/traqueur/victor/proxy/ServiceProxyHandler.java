@@ -16,25 +16,19 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 
-public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID>
+public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID, REPO extends Repository<DTO, MODEL, ID>>
         implements InvocationHandler {
 
     private final Class<MODEL> modelClass;
     private final Class<DTO> dtoClass;
-    private final Class<ID> idClass;
-    private final SqlExecutor sqlExecutor;
-    private final Dialect dialect;
-    private final Repository<DTO, MODEL, ID> repository;
+    private final REPO repository;
 
     @SuppressWarnings("unchecked")
-    public ServiceProxyHandler(Class<? extends Service<?,?,?>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public ServiceProxyHandler(Class<? extends Service<?,?,?,?>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
         this.modelClass = (Class<MODEL>) typeInfo.modelClass();
         this.dtoClass = (Class<DTO>) typeInfo.dtoClass();
-        this.idClass = (Class<ID>) typeInfo.idClass();
-        this.sqlExecutor = sqlExecutor;
-        this.dialect = dialect;
-        Class<? extends Repository<DTO, MODEL, ID>> repositoryInterface = (Class<? extends Repository<DTO, MODEL, ID>>) TypeResolver.resolveRepositoryForService(serviceInterface);
+        Class<REPO> repositoryInterface = (Class<REPO>) typeInfo.repositoryClass();
         this.repository = RepositoryProxyHandler.createProxy(
                 repositoryInterface,
                 sqlExecutor,
@@ -183,12 +177,12 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         ids.forEach(this::deleteById);
     }
 
-    private Repository<DTO, MODEL, ID> repository() {
+    private REPO repository() {
         return repository;
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Service<?,?,?>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <T extends Service<?,?,?,?>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new ServiceProxyHandler<>(serviceInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 serviceInterface.getClassLoader(),

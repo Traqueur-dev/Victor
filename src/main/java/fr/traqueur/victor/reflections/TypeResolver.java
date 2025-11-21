@@ -1,6 +1,5 @@
 package fr.traqueur.victor.reflections;
 
-import fr.traqueur.victor.annotations.UseRepository;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.Service;
 import fr.traqueur.victor.exceptions.VictorException;
@@ -9,14 +8,6 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
 public final class TypeResolver {
-
-    public static Class<?> resolveRepositoryForService(Class<? extends Service<?,?,?>> serviceInterface) {
-        if(serviceInterface.isAnnotationPresent(UseRepository.class)) {
-            UseRepository annotation = serviceInterface.getAnnotation(UseRepository.class);
-            return annotation.value();
-        }
-        return Repository.class;
-    }
 
     public static RepositoryTypeInfo resolveRepositoryTypes(Class<? extends Repository<?,?,?>> repositoryInterface) {
         Type[] genericTypes = getGenericTypes(repositoryInterface, Repository.class);
@@ -32,18 +23,19 @@ public final class TypeResolver {
                 ". Make sure your repository extends Repository<DTO, MODEL, ID>");
     }
 
-    public static ServiceTypeInfo resolveServiceTypes(Class<? extends Service<?,?,?>> serviceInterface) {
+    public static ServiceTypeInfo resolveServiceTypes(Class<? extends Service<?,?,?,?>> serviceInterface) {
         Type[] genericTypes = getGenericTypes(serviceInterface, Service.class);
 
-        if (genericTypes.length >= 3) {
+        if (genericTypes.length >= 4) {
             Class<?> modelClass = (Class<?>) genericTypes[0];
             Class<?> dtoClass = (Class<?>) genericTypes[1];
             Class<?> idClass = (Class<?>) genericTypes[2];
-            return new ServiceTypeInfo(modelClass, dtoClass, idClass);
+            Class<?> repositoryClass = (Class<?>) genericTypes[3];
+            return new ServiceTypeInfo(modelClass, dtoClass, idClass, repositoryClass);
         }
 
         throw new VictorException("Cannot resolve generic types for service: " + serviceInterface +
-                ". Make sure your service extends Service<MODEL, DTO, ID>");
+                ". Make sure your service extends Service<MODEL, DTO, ID, REPO>");
     }
 
     private static Type[] getGenericTypes(Class<?> interfaceClass, Class<?> targetInterface) {
@@ -79,5 +71,5 @@ public final class TypeResolver {
 
     public record RepositoryTypeInfo(Class<?> dtoClass, Class<?> modelClass, Class<?> idClass) {}
 
-    public record ServiceTypeInfo(Class<?> modelClass, Class<?> dtoClass, Class<?> idClass) {}
+    public record ServiceTypeInfo(Class<?> modelClass, Class<?> dtoClass, Class<?> idClass, Class<?> repositoryClass) {}
 }

@@ -3,7 +3,7 @@ package fr.traqueur.victor.entities;
 import java.util.List;
 import java.util.Optional;
 
-public interface Service<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID> {
+public interface Service<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID, REPO extends Repository<DTO, MODEL, ID>> {
 
     MODEL save(MODEL model);
 
@@ -36,5 +36,5 @@ public interface Service<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID> {
 
     void deleteAll(List<ID> ids);
 
-    Repository<DTO, MODEL, ID> repository();
+    REPO repository();
 }

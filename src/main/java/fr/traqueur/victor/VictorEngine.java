@@ -40,7 +40,7 @@ public final class VictorEngine {
         return RepositoryProxyHandler.createProxy(repositoryInterface, sqlExecutor, dialect);
     }
 
-    public <T extends Service<?, ?, ?>> T createService(Class<T> serviceInterface) {
+    public <T extends Service<?, ?, ?, ?>> T createService(Class<T> serviceInterface) {
         checkNotClosed();
         return ServiceProxyHandler.createProxy(serviceInterface, sqlExecutor, dialect);
     }

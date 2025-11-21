@@ -27,7 +27,7 @@ public final class Victor {
         return getDefaultOrThrow().createRepository(repositoryClass);
     }
 
-    public static <T extends Service<?, ?, ?>> T withService(Class<T> serviceClass) {
+    public static <T extends Service<?, ?, ?, ?>> T withService(Class<T> serviceClass) {
         return getDefaultOrThrow().createService(serviceClass);
     }
 
@@ -131,7 +131,7 @@ public final class Victor {
         if (isRepositoryInterface(interfaceClass)) {
             return (T) createRepository((Class<? extends Repository<?, ?, ?>>) interfaceClass);
         } else if (isServiceInterface(interfaceClass)) {
-            return (T) createService((Class<? extends Service<?, ?, ?>>) interfaceClass);
+            return (T) createService((Class<? extends Service<?, ?, ?, ?>>) interfaceClass);
         }
 
         throw new VictorException("Unsupported interface type: " + interfaceClass.getName());
@@ -141,7 +141,7 @@ public final class Victor {
         return engine.createRepository(repositoryClass);
     }
 
-    public <T extends Service<?, ?, ?>> T createService(Class<T> serviceClass) {
+    public <T extends Service<?, ?, ?, ?>> T createService(Class<T> serviceClass) {
         return engine.createService(serviceClass);
     }
 
