@@ -95,7 +95,6 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private Optional<MODEL> findById(ID id) {
-        // ✅ CHANGEMENT: Vraie logique via repository
         try {
             Optional<DTO> dtoOptional = repository().findById(id);
             return dtoOptional.map(dto -> VictorConverter.dtoToModel(dto, modelClass));
@@ -105,7 +104,6 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private List<MODEL> findAll() {
-        // ✅ CHANGEMENT: Vraie logique via repository
         try {
             List<DTO> dtos = repository().findAll();
             return dtos.stream()
@@ -117,7 +115,6 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private MODEL update(ID id, MODEL model) {
-        // ✅ CHANGEMENT: Vérification d'existence + logique réelle
         if (!exists(id)) {
             throw new VictorException("Model not found for update: " + id);
         }
@@ -143,10 +140,8 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private void delete(MODEL model) {
-        // Hooks inchangés
         model.beforeDelete();
 
-        // ✅ CHANGEMENT: Vraie logique de suppression
         if (model.getId() == null) {
             throw new VictorException("Cannot delete model without ID");
         }
@@ -162,7 +157,6 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     private boolean exists(ID id) {
-        // ✅ CHANGEMENT: Vraie logique via repository
         try {
             return repository().existsById(id);
         } catch (Exception e) {

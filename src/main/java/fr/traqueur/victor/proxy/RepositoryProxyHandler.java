@@ -85,7 +85,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         try {
             MODEL model = dto.toModel();
 
-            // Décider entre INSERT simple et UPSERT
             if (shouldUseSimpleInsert(model)) {
                 return insert(dto, model);
             } else {
@@ -144,7 +143,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private Optional<DTO> findById(ID id) {
-        // ✅ CHANGEMENT: Utilise dialect au lieu de sqlGenerator
         String sql = dialect.generateSelectById(entityMetadata);
         Object[] params = { id };
 
@@ -155,14 +153,12 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private List<DTO> findAll() {
-        // ✅ CHANGEMENT: Utilise dialect au lieu de sqlGenerator
         String sql = dialect.generateSelectAll(entityMetadata);
         SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, null, mapper);
     }
 
     private void deleteById(ID id) {
-        // ✅ CHANGEMENT: Utilise dialect au lieu de sqlGenerator
         String sql = dialect.generateDelete(entityMetadata);
         Object[] params = { id };
 
@@ -181,7 +177,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private boolean existsById(ID id) {
-        // ✅ CHANGEMENT: Utilise dialect au lieu de sqlGenerator
         String sql = dialect.generateExists(entityMetadata);
         Object[] params = { id };
 
@@ -190,7 +185,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private long count() {
-        // ✅ CHANGEMENT: Utilise dialect au lieu de sqlGenerator
         String sql = dialect.generateCount(entityMetadata);
         return sqlExecutor.executeCount(sql, null);
     }
@@ -242,7 +236,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private Object[] extractAllFieldValues(MODEL model) {
-        // For UPDATE: non-ID fields + ID field at the end
         var nonIdValues = entityMetadata.getNonIdFields().stream()
                 .map(field -> field.getValue(model))
                 .toList();

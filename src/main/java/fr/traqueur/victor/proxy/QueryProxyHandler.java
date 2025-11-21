@@ -28,7 +28,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         this.dtoClass = dtoClass;
         this.entityMetadata = entityMetadata;
         this.sqlExecutor = sqlExecutor;
-        this.queryBuilder = new QueryBuilder(entityMetadata, dialect); // ✅ Passer le dialect
+        this.queryBuilder = new QueryBuilder(entityMetadata, dialect);
     }
 
     @Override
@@ -38,7 +38,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         return switch (methodName) {
             case "select" -> {
                 queryBuilder.select((String[]) args[0]);
-                yield proxy; // Return the same proxy instance
+                yield proxy;
             }
             case "where" -> {
                 queryBuilder.where((String) args[0], getVarArgs(args));
