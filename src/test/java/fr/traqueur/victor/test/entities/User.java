@@ -16,11 +16,11 @@ public class User implements Entity<Long> {
     
     @Column()
     private String email;
-    
-    @Column
+
+    @Column()
     private Integer age;
     
-    @Column
+    @Column()
     private Boolean active;
     
     @Column(length = 100)

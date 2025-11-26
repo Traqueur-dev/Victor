@@ -23,12 +23,11 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     private final Class<DTO> dtoClass;
     private final REPO repository;
 
-    @SuppressWarnings("unchecked")
-    public ServiceProxyHandler(Class<? extends Service<?,?,?,?>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public ServiceProxyHandler(Class<? extends Service<MODEL,DTO,ID,REPO>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
-        this.modelClass = (Class<MODEL>) typeInfo.modelClass();
-        this.dtoClass = (Class<DTO>) typeInfo.dtoClass();
-        Class<REPO> repositoryInterface = (Class<REPO>) typeInfo.repositoryClass();
+        this.modelClass = typeInfo.modelClass();
+        this.dtoClass = typeInfo.dtoClass();
+        Class<REPO> repositoryInterface = typeInfo.repositoryClass();
         this.repository = RepositoryProxyHandler.createProxy(
                 repositoryInterface,
                 sqlExecutor,
@@ -182,7 +181,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Service<?,?,?,?>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID, REPO extends Repository<DTO, MODEL, ID>, T extends Service<MODEL,DTO,ID,REPO>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new ServiceProxyHandler<>(serviceInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 serviceInterface.getClassLoader(),

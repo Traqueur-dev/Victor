@@ -1,5 +1,7 @@
 package fr.traqueur.victor;
 
+import fr.traqueur.victor.entities.Dto;
+import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Repository;
 import fr.traqueur.victor.entities.Service;
 import fr.traqueur.victor.entities.transaction.Transaction;
@@ -19,15 +21,11 @@ public final class Victor {
         this.transactionManager = engine.getTransactionManager();
     }
 
-    public static <T> T with(Class<T> interfaceClass) {
-        return getDefaultOrThrow().create(interfaceClass);
-    }
-
-    public static <T extends Repository<?, ?, ?>> T withRepository(Class<T> repositoryClass) {
+    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T withRepository(Class<T> repositoryClass) {
         return getDefaultOrThrow().createRepository(repositoryClass);
     }
 
-    public static <T extends Service<?, ?, ?, ?>> T withService(Class<T> serviceClass) {
+    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, REPO extends Repository<DTO,MODEL,ID>, T extends Service<MODEL, DTO, ID, REPO>> T withService(Class<T> serviceClass) {
         return getDefaultOrThrow().createService(serviceClass);
     }
 
@@ -126,22 +124,11 @@ public final class Victor {
                 .build();
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> T create(Class<T> interfaceClass) {
-        if (isRepositoryInterface(interfaceClass)) {
-            return (T) createRepository((Class<? extends Repository<?, ?, ?>>) interfaceClass);
-        } else if (isServiceInterface(interfaceClass)) {
-            return (T) createService((Class<? extends Service<?, ?, ?, ?>>) interfaceClass);
-        }
-
-        throw new VictorException("Unsupported interface type: " + interfaceClass.getName());
-    }
-
-    public <T extends Repository<?, ?, ?>> T createRepository(Class<T> repositoryClass) {
+    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T createRepository(Class<T> repositoryClass) {
         return engine.createRepository(repositoryClass);
     }
 
-    public <T extends Service<?, ?, ?, ?>> T createService(Class<T> serviceClass) {
+    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, REPO extends Repository<DTO,MODEL,ID>, T extends Service<MODEL, DTO, ID, REPO>> T createService(Class<T> serviceClass) {
         return engine.createService(serviceClass);
     }
 
@@ -175,19 +162,7 @@ public final class Victor {
         defaultInstance = victor;
     }
 
-    private boolean isRepositoryInterface(Class<?> clazz) {
-        return Repository.class.isAssignableFrom(clazz);
-    }
-
-    private boolean isServiceInterface(Class<?> clazz) {
-        return Service.class.isAssignableFrom(clazz);
-    }
-
     static Victor create(VictorEngine engine) {
         return new Victor(engine);
-    }
-
-    public void runMigrations() {
-        engine.runMigrations();
     }
 }

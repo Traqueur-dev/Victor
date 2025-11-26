@@ -1,6 +1,8 @@
 package fr.traqueur.victor;
 
 import fr.traqueur.victor.database.migration.AutoMigration;
+import fr.traqueur.victor.entities.Dto;
+import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.managers.ConnectionManager;
 import fr.traqueur.victor.database.SqlExecutor;
@@ -33,12 +35,12 @@ public final class VictorEngine {
         VictorLogger.debug("Victor Engine initialized with dialect: " + dialect.getName());
     }
 
-    public <T extends Repository<?, ?, ?>> T createRepository(Class<T> repositoryInterface) {
+    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T createRepository(Class<T> repositoryInterface) {
         checkNotClosed();
         return RepositoryProxyHandler.createProxy(repositoryInterface, sqlExecutor, dialect);
     }
 
-    public <T extends Service<?, ?, ?, ?>> T createService(Class<T> serviceInterface) {
+    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, REPO extends Repository<DTO,MODEL,ID>, T extends Service<MODEL, DTO, ID, REPO>> T createService(Class<T> serviceInterface) {
         checkNotClosed();
         return ServiceProxyHandler.createProxy(serviceInterface, sqlExecutor, dialect);
     }

@@ -1,5 +1,6 @@
 package fr.traqueur.victor.entities;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,9 +20,9 @@ public interface Repository<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID
 
     long count();
 
-    List<DTO> saveAll(Iterable<DTO> dtos);
+    Collection<DTO> saveAll(Collection<DTO> dtos);
 
-    void deleteAll(Iterable<DTO> dtos);
+    void deleteAll(Collection<DTO> dtos);
 
     void deleteAll();
 
