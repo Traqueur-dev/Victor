@@ -2,6 +2,7 @@ package fr.traqueur.victor.database.migration;
 
 import fr.traqueur.victor.VictorConfiguration;
 import fr.traqueur.victor.database.SqlExecutor;
+import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
@@ -29,7 +30,7 @@ public final class AutoMigration {
             return;
         }
 
-        Set<Class<?>> entityClasses = configuration.entityClasses();
+        Set<Class<? extends Entity<?>>> entityClasses = configuration.entityClasses();
 
         // Si pas d'entités configurées, essayer l'auto-scan
         if (entityClasses.isEmpty()) {

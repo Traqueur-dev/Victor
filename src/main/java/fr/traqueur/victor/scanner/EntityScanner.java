@@ -14,12 +14,12 @@ import java.util.Set;
 
 public final class EntityScanner {
 
-    public static Set<Class<?>> scanForEntities() {
+    public static Set<Class<? extends Entity<?>>> scanForEntities() {
         return scanForEntities(""); // Scan all packages
     }
 
-    public static Set<Class<?>> scanForEntities(String basePackage) {
-        Set<Class<?>> entities = new HashSet<>();
+    public static Set<Class<? extends Entity<?>>> scanForEntities(String basePackage) {
+        Set<Class<? extends Entity<?>>> entities = new HashSet<>();
 
         try {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
@@ -38,8 +38,8 @@ public final class EntityScanner {
         return entities;
     }
 
-    private static Set<Class<?>> findClasses(File directory, String packageName) {
-        Set<Class<?>> classes = new HashSet<>();
+    private static Set<Class<? extends Entity<?>>> findClasses(File directory, String packageName) {
+        Set<Class<? extends Entity<?>>> classes = new HashSet<>();
 
         if (!directory.exists()) {
             return classes;
@@ -61,7 +61,7 @@ public final class EntityScanner {
                     Class<?> clazz = Class.forName(className);
 
                     if (isValidEntity(clazz)) {
-                        classes.add(clazz);
+                        classes.add((Class<? extends Entity<?>>) clazz);
                         VictorLogger.info("Auto-discovered entity: " + clazz.getSimpleName());
                     }
                 } catch (ClassNotFoundException | NoClassDefFoundError e) {
@@ -112,8 +112,8 @@ public final class EntityScanner {
     /**
      * Scan for entities in specific packages
      */
-    public static Set<Class<?>> scanPackages(String... packages) {
-        Set<Class<?>> allEntities = new HashSet<>();
+    public static Set<Class<? extends Entity<?>>> scanPackages(String... packages) {
+        Set<Class<? extends Entity<?>>> allEntities = new HashSet<>();
 
         for (String pkg : packages) {
             allEntities.addAll(scanForEntities(pkg));

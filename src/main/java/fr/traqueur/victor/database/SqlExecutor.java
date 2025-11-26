@@ -42,20 +42,12 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        Statement stmt = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.createStatement();
-
+        Connection conn = connectionManager.getConnection();
+        try (Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
-
         } catch (SQLException e) {
             throw new VictorException("Failed to execute DDL: " + sql, e);
         } finally {
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -70,13 +62,9 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-            rs = stmt.executeQuery();
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
 
             if (rs.next()) {
                 return rs.getLong(1);
@@ -86,12 +74,6 @@ public final class SqlExecutor {
         } catch (SQLException e) {
             throw new VictorException("Failed to execute count query: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -101,24 +83,15 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL (UPSERT): {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
             }
-
             return stmt.executeUpdate();
-
         } catch (SQLException e) {
             throw new VictorException("Failed to execute upsert: " + sql, e);
         } finally {
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -129,13 +102,9 @@ public final class SqlExecutor {
         }
 
         Set<String> results = new HashSet<>();
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-            rs = stmt.executeQuery();
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
                 String value = rs.getString(1);
@@ -143,18 +112,11 @@ public final class SqlExecutor {
                     results.add(value.toLowerCase());
                 }
             }
-
             return results;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query for string set: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -169,27 +131,15 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, id);
-
-            rs = stmt.executeQuery();
-            return rs.next();
-
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
         } catch (SQLException e) {
             throw new VictorException("Failed to execute exists query: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -204,25 +154,17 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, id);
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
                 throw new VictorException("Delete failed, no rows affected for ID: " + id);
             }
-
         } catch (SQLException e) {
             throw new VictorException("Failed to execute delete: " + sql, e);
         } finally {
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -232,13 +174,8 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             setParameters(stmt, params);
 
             int rowsAffected = stmt.executeUpdate();
@@ -246,21 +183,15 @@ public final class SqlExecutor {
                 throw new VictorException("Insert failed, no rows affected");
             }
 
-            rs = stmt.getGeneratedKeys();
-            if (rs.next()) {
-                return rs.getObject(1, idType);
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getObject(1, idType);
+                }
+                throw new VictorException("Insert failed, no generated key returned");
             }
-            throw new VictorException("Insert failed, no generated key returned");
-
         } catch (SQLException e) {
             throw new VictorException("Failed to execute insert: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -273,24 +204,15 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
             }
-
             return stmt.executeUpdate();
-
         } catch (SQLException e) {
             throw new VictorException("Failed to execute update: " + sql, e);
         } finally {
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -303,33 +225,23 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            rs = stmt.executeQuery();
             List<T> results = new ArrayList<>();
-            while (rs.next()) {
-                results.add(mapper.map(rs));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    results.add(mapper.map(rs));
+                }
             }
             return results;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -339,32 +251,22 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            rs = stmt.executeQuery();
-            if (rs.next()) {
-                return mapper.map(rs);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapper.map(rs);
+                }
+                return null;
             }
-            return null;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query single: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -374,32 +276,22 @@ public final class SqlExecutor {
             VictorLogger.debug("SQL: {}", sql);
         }
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-        try {
-            conn = connectionManager.getConnection();
-            stmt = conn.prepareStatement(sql);
-
+        Connection conn = connectionManager.getConnection();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
             }
 
-            rs = stmt.executeQuery();
-            if (rs.next()) {
-                return rs.getLong(1);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+                return 0;
             }
-            return 0;
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute count: " + sql, e);
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
-            }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
-            }
             closeConnectionIfNotTransactional(conn);
         }
     }
