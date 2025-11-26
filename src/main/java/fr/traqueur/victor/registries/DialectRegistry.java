@@ -1,7 +1,9 @@
 package fr.traqueur.victor.registries;
 
+import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +42,7 @@ public final class DialectRegistry {
         
         for (Dialect dialect : loader) {
             registerDialect(dialect);
-            System.out.println("Loaded dialect: " + dialect.getName());
+            VictorLogger.debug("Loaded dialect {}", dialect.getClass().getSimpleName());
         }
         
         if (allDialects.isEmpty()) {
@@ -49,8 +51,8 @@ public final class DialectRegistry {
                 "(e.g., victor-dialect-h2, victor-dialect-sqlite, etc.) in your classpath."
             );
         }
-        
-        System.out.println("Total dialects loaded: " + allDialects.size());
+
+        VictorLogger.info("Loaded {} dialects", allDialects.size());
     }
     
     public void registerDialect(Dialect dialect) {

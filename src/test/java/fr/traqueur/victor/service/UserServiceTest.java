@@ -5,6 +5,7 @@ import fr.traqueur.victor.test.dto.UserDto;
 import fr.traqueur.victor.test.entities.User;
 import fr.traqueur.victor.test.repository.UserRepository;
 import fr.traqueur.victor.test.service.UserService;
+import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.*;
 
 import java.util.List;
@@ -43,7 +44,7 @@ class UserServiceTest {
     @Order(1)
     @DisplayName("Test 1: Save a user via service")
     void testSaveUser() {
-        System.out.println("\n=== Test 1: Save user ===");
+        VictorLogger.info("\n=== Test 1: Save user ===");
 
         User user = new User("john_doe", "john@example.com", 25, true, "John Doe");
         User saved = userService.save(user);
@@ -56,14 +57,14 @@ class UserServiceTest {
         assertTrue(saved.getActive());
         assertEquals("John Doe", saved.getName());
 
-        System.out.println("Saved user: " + saved);
+        VictorLogger.info("Saved user: " + saved);
     }
 
     @Test
     @Order(2)
     @DisplayName("Test 2: Find user by ID")
     void testFindById() {
-        System.out.println("\n=== Test 2: Find by ID ===");
+        VictorLogger.info("\n=== Test 2: Find by ID ===");
 
         // Save a user first
         User user = new User("jane_smith", "jane@example.com", 30, true, "Jane Smith");
@@ -76,14 +77,14 @@ class UserServiceTest {
         assertEquals("jane_smith", found.get().getUsername());
         assertEquals("jane@example.com", found.get().getEmail());
 
-        System.out.println("Found user: " + found.get());
+        VictorLogger.info("Found user: " + found.get());
     }
 
     @Test
     @Order(3)
     @DisplayName("Test 3: Find all users")
     void testFindAll() {
-        System.out.println("\n=== Test 3: Find all ===");
+        VictorLogger.info("\n=== Test 3: Find all ===");
 
         // Save multiple users
         userService.save(new User("user1", "user1@test.com", 20, true, "User One"));
@@ -94,14 +95,14 @@ class UserServiceTest {
         assertNotNull(users);
         assertTrue(users.size() >= 2);
 
-        System.out.println("Total users: " + users.size());
+        VictorLogger.info("Total users: " + users.size());
     }
 
     @Test
     @Order(4)
     @DisplayName("Test 4: Update user")
     void testUpdateUser() {
-        System.out.println("\n=== Test 4: Update user ===");
+        VictorLogger.info("\n=== Test 4: Update user ===");
 
         // Save a user
         User user = new User("bob_wilson", "bob@example.com", 20, false, "Bob Wilson");
@@ -115,14 +116,14 @@ class UserServiceTest {
         assertEquals(21, updated.getAge());
         assertTrue(updated.getActive());
 
-        System.out.println("Updated user: " + updated);
+        VictorLogger.info("Updated user: " + updated);
     }
 
     @Test
     @Order(5)
     @DisplayName("Test 5: Delete user by ID")
     void testDeleteById() {
-        System.out.println("\n=== Test 5: Delete by ID ===");
+        VictorLogger.info("\n=== Test 5: Delete by ID ===");
 
         // Save a user
         User user = new User("to_delete", "delete@example.com", 30, true, "To Delete");
@@ -138,14 +139,14 @@ class UserServiceTest {
         // Verify user is deleted
         assertFalse(userService.exists(userId));
 
-        System.out.println("User deleted successfully");
+        VictorLogger.info("User deleted successfully");
     }
 
     @Test
     @Order(6)
     @DisplayName("Test 6: Delete user by entity")
     void testDeleteByEntity() {
-        System.out.println("\n=== Test 6: Delete by entity ===");
+        VictorLogger.info("\n=== Test 6: Delete by entity ===");
 
         // Save a user
         User user = new User("to_delete2", "delete2@example.com", 35, true, "To Delete 2");
@@ -157,14 +158,14 @@ class UserServiceTest {
         // Verify user is deleted
         assertFalse(userService.exists(saved.getId()));
 
-        System.out.println("User deleted successfully");
+        VictorLogger.info("User deleted successfully");
     }
 
     @Test
     @Order(7)
     @DisplayName("Test 7: Check if user exists")
     void testExists() {
-        System.out.println("\n=== Test 7: Exists ===");
+        VictorLogger.info("\n=== Test 7: Exists ===");
 
         // Save a user
         User user = new User("exists_user", "exists@example.com", 28, true, "Exists User");
@@ -174,27 +175,27 @@ class UserServiceTest {
         assertTrue(userService.exists(saved.getId()));
         assertFalse(userService.exists(99999L));
 
-        System.out.println("Exists check passed");
+        VictorLogger.info("Exists check passed");
     }
 
     @Test
     @Order(8)
     @DisplayName("Test 8: Count users")
     void testCount() {
-        System.out.println("\n=== Test 8: Count ===");
+        VictorLogger.info("\n=== Test 8: Count ===");
 
         long count = userService.count();
 
         assertTrue(count > 0);
 
-        System.out.println("Total count: " + count);
+        VictorLogger.info("Total count: " + count);
     }
 
     @Test
     @Order(9)
     @DisplayName("Test 9: Save all users")
     void testSaveAll() {
-        System.out.println("\n=== Test 9: Save all ===");
+        VictorLogger.info("\n=== Test 9: Save all ===");
 
         List<User> users = List.of(
             new User("bulk1", "bulk1@test.com", 25, true, "Bulk User 1"),
@@ -210,14 +211,14 @@ class UserServiceTest {
         // Verify all have IDs
         saved.forEach(user -> assertNotNull(user.getId()));
 
-        System.out.println("Saved " + saved.size() + " users in bulk");
+        VictorLogger.info("Saved " + saved.size() + " users in bulk");
     }
 
     @Test
     @Order(10)
     @DisplayName("Test 10: Delete all by IDs")
     void testDeleteAll() {
-        System.out.println("\n=== Test 10: Delete all ===");
+        VictorLogger.info("\n=== Test 10: Delete all ===");
 
         // Save users
         List<User> users = List.of(
@@ -233,14 +234,14 @@ class UserServiceTest {
         // Verify deleted
         ids.forEach(id -> assertFalse(userService.exists(id)));
 
-        System.out.println("Deleted all users");
+        VictorLogger.info("Deleted all users");
     }
 
     @Test
     @Order(11)
     @DisplayName("Test 11: Validate and save - valid user")
     void testValidateAndSaveValid() {
-        System.out.println("\n=== Test 11: Validate and save (valid) ===");
+        VictorLogger.info("\n=== Test 11: Validate and save (valid) ===");
 
         User user = new User("valid_user", "valid@example.com", 28, true, "Valid User");
 
@@ -249,14 +250,14 @@ class UserServiceTest {
         assertNotNull(saved);
         assertNotNull(saved.getId());
 
-        System.out.println("Valid user saved: " + saved);
+        VictorLogger.info("Valid user saved: " + saved);
     }
 
     @Test
     @Order(12)
     @DisplayName("Test 12: Access repository through service")
     void testAccessRepository() {
-        System.out.println("\n=== Test 12: Access repository ===");
+        VictorLogger.info("\n=== Test 12: Access repository ===");
 
         // Accéder au repository via le service
         UserRepository repository = userService.repository();
@@ -273,14 +274,14 @@ class UserServiceTest {
         assertTrue(found.isPresent());
         assertEquals("repo_test", found.get().username());
 
-        System.out.println("Repository access successful: " + found.get());
+        VictorLogger.info("Repository access successful: " + found.get());
     }
 
     @Test
     @Order(13)
     @DisplayName("Test 13: Use custom repository methods via service")
     void testCustomRepositoryMethods() {
-        System.out.println("\n=== Test 13: Custom repository methods ===");
+        VictorLogger.info("\n=== Test 13: Custom repository methods ===");
 
         // Sauvegarder des utilisateurs de test
         userService.save(new User("alice", "alice@test.com", 22, true, "Alice Wonder"));
@@ -302,14 +303,14 @@ class UserServiceTest {
         List<UserDto> activeUsers = repo.findByActiveOrderByUsernameAsc(true);
         assertFalse(activeUsers.isEmpty());
 
-        System.out.println("Custom repository methods work correctly");
+        VictorLogger.info("Custom repository methods work correctly");
     }
 
     @Test
     @Order(14)
     @DisplayName("Test 14: Use @Query methods via service")
     void testQueryMethods() {
-        System.out.println("\n=== Test 14: @Query methods ===");
+        VictorLogger.info("\n=== Test 14: @Query methods ===");
 
         // Sauvegarder des utilisateurs de test
         userService.save(new User("query1", "query1@test.com", 40, true, "Query Test 1"));
@@ -330,6 +331,6 @@ class UserServiceTest {
         long activeCount = repo.countByActive(true);
         assertTrue(activeCount > 0);
 
-        System.out.println("@Query methods work correctly. Active count: " + activeCount);
+        VictorLogger.info("@Query methods work correctly. Active count: " + activeCount);
     }
 }

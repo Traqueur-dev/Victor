@@ -4,6 +4,7 @@ import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +47,7 @@ public final class DynamicQuerySqlGenerator {
         String generatedSql = sql.toString();
 
         if (showSql) {
-            System.out.println("Dynamic Query SQL: " + generatedSql);
+            VictorLogger.debug("Generated sql: " + generatedSql);
         }
         
         return generatedSql;

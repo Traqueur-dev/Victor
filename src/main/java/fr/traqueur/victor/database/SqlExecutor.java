@@ -6,6 +6,7 @@ import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.entities.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.managers.ConnectionManager;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.math.BigDecimal;
 import java.sql.*;
@@ -15,8 +16,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
+/**
+ * Executes SQL statements with proper resource management and logging.
+ */
 public final class SqlExecutor {
-
     private final ConnectionManager connectionManager;
     private final Dialect dialect;
 
@@ -36,7 +39,7 @@ public final class SqlExecutor {
      */
     public void executeDDL(String sql) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -64,7 +67,7 @@ public final class SqlExecutor {
         String sql = dialect.generateCount(metadata);
 
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -95,7 +98,7 @@ public final class SqlExecutor {
 
     public int executeUpsert(String sql, Object[] params) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL (UPSERT): " + sql);
+            VictorLogger.debug("SQL (UPSERT): {}", sql);
         }
 
         Connection conn = null;
@@ -122,7 +125,7 @@ public final class SqlExecutor {
 
     public Set<String> executeQueryForStringSet(String sql) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Set<String> results = new HashSet<>();
@@ -163,7 +166,7 @@ public final class SqlExecutor {
         String sql = dialect.generateExists(metadata);
 
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -198,7 +201,7 @@ public final class SqlExecutor {
         String sql = dialect.generateDelete(metadata);
 
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -226,7 +229,7 @@ public final class SqlExecutor {
 
     public <T> T executeInsertWithGeneratedKey(String sql, Object[] params, Class<T> idType) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -267,7 +270,7 @@ public final class SqlExecutor {
      */
     public int executeUpdate(String sql, Object[] params) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -297,7 +300,7 @@ public final class SqlExecutor {
      */
     public <T> List<T> executeQuery(String sql, Object[] params, RowMapper<T> mapper) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -333,7 +336,7 @@ public final class SqlExecutor {
 
     public <T> T executeQuerySingle(String sql, Object[] params, RowMapper<T> mapper) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -368,7 +371,7 @@ public final class SqlExecutor {
 
     public long executeCount(String sql, Object[] params) {
         if (connectionManager.getConfiguration().showSql()) {
-            System.out.println("SQL: " + sql);
+            VictorLogger.debug("SQL: {}", sql);
         }
 
         Connection conn = null;
@@ -499,7 +502,7 @@ public final class SqlExecutor {
                 }
             }
         } catch (SQLException e) {
-            System.err.println("Warning: Failed to close connection: " + e.getMessage());
+            VictorLogger.warn("Failed to close connection", e);
         }
     }
 

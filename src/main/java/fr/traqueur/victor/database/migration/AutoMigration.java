@@ -7,6 +7,7 @@ import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.registries.EntityMetadataRegistry;
 import fr.traqueur.victor.scanner.EntityScanner;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.util.Objects;
 import java.util.Set;
@@ -32,13 +33,13 @@ public final class AutoMigration {
 
         // Si pas d'entités configurées, essayer l'auto-scan
         if (entityClasses.isEmpty()) {
-            System.out.println("No entities configured, attempting auto-scan...");
+            VictorLogger.warn("No entity classes found. attempting auto-scan...");
             entityClasses = EntityScanner.scanForEntities();
         }
 
         // Get existing tables
         Set<String> existingTables = getExistingTables();
-        System.out.println("Existing tables: " + existingTables);
+        VictorLogger.debug("Found existing tables: " + existingTables);
 
         // Create tables for each entity
         for (Class<?> entityClass : entityClasses) {
@@ -46,8 +47,7 @@ public final class AutoMigration {
                 EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
                 createTableIfNotExists(metadata, existingTables);
             } catch (Exception e) {
-                System.err.println("Failed to migrate entity " + entityClass.getSimpleName() + ": " + e.getMessage());
-                // Continue with other entities instead of failing completely
+                VictorLogger.error("Failed to migrate entity {}", e, entityClass.getSimpleName());
             }
         }
     }
@@ -57,7 +57,7 @@ public final class AutoMigration {
 
         if (existingTables.contains(tableName)) {
             if (configuration.showSql()) {
-                System.out.println("Table already exists: " + tableName);
+                VictorLogger.debug("Skipping auto-scan for table {}", tableName);
             }
             return;
         }
@@ -65,7 +65,7 @@ public final class AutoMigration {
         createTable(metadata);
 
         if (configuration.showSql()) {
-            System.out.println("✓ Created table: " + tableName);
+            VictorLogger.debug("Auto-scan for table {}", tableName);
         }
     }
 
@@ -76,9 +76,9 @@ public final class AutoMigration {
             if (createSchemaSQL != null) {
                 try {
                     sqlExecutor.executeDDL(createSchemaSQL);
-                    System.out.println("Schema created or already exists: " + metadata.getSchema());
+                    VictorLogger.info("Schema created or already exists: " + metadata.getSchema());
                 } catch (Exception e) {
-                    System.out.println("Warning: Could not create schema " + metadata.getSchema() + ": " + e.getMessage());
+                    VictorLogger.error("Failed to create schema {}", e, metadata.getSchema());
                 }
             }
         }
@@ -97,10 +97,7 @@ public final class AutoMigration {
         try {
             return queryExistingTables();
         } catch (Exception e) {
-            System.err.println("Warning: Could not query existing tables: " + e.getMessage());
-            if (configuration.showSql()) {
-                e.printStackTrace();
-            }
+            VictorLogger.error("Failed to query existing tables", e);
             return Set.of();
         }
     }
@@ -109,16 +106,11 @@ public final class AutoMigration {
         String schemaName = determineSchemaForTableListing();
         String sql = dialect.generateListTablesSQL(schemaName);
 
-        if (configuration.showSql()) {
-            System.out.println("Querying existing tables with schema: " +
-                    (schemaName != null ? schemaName : "default"));
-        }
+        VictorLogger.debug("Querying existing tables for schema {}", (schemaName != null ? schemaName : "default"));
 
         Set<String> tables = sqlExecutor.executeQueryForStringSet(sql);
 
-        if (configuration.showSql()) {
-            System.out.println("Found " + tables.size() + " existing tables: " + tables);
-        }
+        VictorLogger.info("Found {} existing tables for schema {}", tables.size(), schemaName);
 
         return tables;
     }
@@ -127,7 +119,7 @@ public final class AutoMigration {
         var schemas = configuration.entityClasses().stream()
                 .map(clazz -> {
                     try {
-                        var metadata = EntityMetadataRegistry.getInstance().getMetadata(clazz);
+                        EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(clazz);
                         return metadata.getSchema();
                     } catch (Exception e) {
                         return null;

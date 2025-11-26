@@ -4,6 +4,7 @@ import fr.traqueur.victor.annotations.Table;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.io.File;
 import java.lang.reflect.Modifier;
@@ -31,8 +32,7 @@ public final class EntityScanner {
             }
 
         } catch (Exception e) {
-            System.err.println("Warning: Could not auto-scan entities: " + e.getMessage());
-            // Continue without auto-scan
+            VictorLogger.error("Could not auto-scan entities", e);
         }
 
         return entities;
@@ -62,7 +62,7 @@ public final class EntityScanner {
 
                     if (isValidEntity(clazz)) {
                         classes.add(clazz);
-                        System.out.println("Auto-discovered entity: " + clazz.getSimpleName());
+                        VictorLogger.info("Auto-discovered entity: " + clazz.getSimpleName());
                     }
                 } catch (ClassNotFoundException | NoClassDefFoundError e) {
                     // Skip classes that can't be loaded
@@ -104,7 +104,7 @@ public final class EntityScanner {
             EntityMetadata.of(clazz);
             return true;
         } catch (Exception e) {
-            System.out.println("Skipping invalid entity " + clazz.getSimpleName() + ": " + e.getMessage());
+            VictorLogger.info("Skipping invalid entity " + clazz.getSimpleName() + ": " + e.getMessage());
             return false;
         }
     }

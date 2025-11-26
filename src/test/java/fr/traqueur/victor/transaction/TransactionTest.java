@@ -6,6 +6,7 @@ import fr.traqueur.victor.exceptions.VictorTransactionException;
 import fr.traqueur.victor.test.dto.UserDto;
 import fr.traqueur.victor.test.entities.User;
 import fr.traqueur.victor.test.repository.UserRepository;
+import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.*;
 
 import java.util.Optional;
@@ -27,7 +28,7 @@ class TransactionTest {
         }
 
         String dbName = "txtest_" + System.nanoTime();
-        System.out.println("\n[TEST] Creating new database: " + dbName);
+        VictorLogger.info("\n[TEST] Creating new database: " + dbName);
 
         victor = Victor.configure()
                 .h2()
@@ -52,7 +53,7 @@ class TransactionTest {
     @Test
     @Order(1)
     void testTransactionCommit() {
-        System.out.println("\n--- Test 1: Transaction Commit ---");
+        VictorLogger.info("\n--- Test 1: Transaction Commit ---");
         
         // Exécuter dans une transaction
         victor.transaction(() -> {
@@ -62,7 +63,7 @@ class TransactionTest {
             UserDto user2 = new UserDto(null, "user2", "user2@example.com", 30, true, "User Two");
             userRepository.save(user2);
             
-            System.out.println("✓ 2 users saved in transaction");
+            VictorLogger.info("✓ 2 users saved in transaction");
         });
         
         // Vérifier que les données sont bien présentes
@@ -75,13 +76,13 @@ class TransactionTest {
         Optional<UserDto> user2 = userRepository.findByUsername("user2");
         assertTrue(user2.isPresent(), "User2 should exist");
         
-        System.out.println("✓ Transaction committed successfully");
+        VictorLogger.info("✓ Transaction committed successfully");
     }
     
     @Test
     @Order(2)
     void testTransactionRollback() {
-        System.out.println("\n--- Test 2: Transaction Rollback ---");
+        VictorLogger.info("\n--- Test 2: Transaction Rollback ---");
         
         // Sauvegarder un utilisateur avant la transaction
         UserDto existingUser = new UserDto(null, "existing", "existing@example.com", 20, true, "Existing User");
@@ -96,7 +97,7 @@ class TransactionTest {
                 UserDto user1 = new UserDto(null, "user1", "user1@example.com", 25, true, "User One");
                 userRepository.save(user1);
                 
-                System.out.println("✓ User1 saved");
+                VictorLogger.info("✓ User1 saved");
                 
                 // Lever une exception pour provoquer un rollback
                 throw new RuntimeException("Simulated error");
@@ -113,13 +114,13 @@ class TransactionTest {
         Optional<UserDto> existing = userRepository.findByUsername("existing");
         assertTrue(existing.isPresent(), "Existing user should still exist");
         
-        System.out.println("✓ Transaction rolled back successfully");
+        VictorLogger.info("✓ Transaction rolled back successfully");
     }
     
     @Test
     @Order(3)
     void testTransactionWithReturn() {
-        System.out.println("\n--- Test 3: Transaction with Return Value ---");
+        VictorLogger.info("\n--- Test 3: Transaction with Return Value ---");
         
         // Exécuter une transaction avec retour
         UserDto savedUser = victor.transaction(() -> {
@@ -135,14 +136,14 @@ class TransactionTest {
         Optional<UserDto> found = userRepository.findById(savedUser.id());
         assertTrue(found.isPresent(), "User should exist in database");
         
-        System.out.println("✓ Transaction with return value successful");
-        System.out.println("  Returned: " + savedUser);
+        VictorLogger.info("✓ Transaction with return value successful");
+        VictorLogger.info("  Returned: " + savedUser);
     }
 
     @Test
     @Order(4)
     void testManualTransaction() {
-        System.out.println("\n--- Test 4: Manual Transaction ---");
+        VictorLogger.info("\n--- Test 4: Manual Transaction ---");
 
         Transaction tx = victor.beginTransaction();
         try {
@@ -152,10 +153,10 @@ class TransactionTest {
             UserDto user2 = new UserDto(null, "manual2", "manual2@example.com", 30, true, "Manual Two");
             userRepository.save(user2);
 
-            System.out.println("✓ 2 users saved in manual transaction");
+            VictorLogger.info("✓ 2 users saved in manual transaction");
 
             tx.commit();
-            System.out.println("✓ Manual commit successful");
+            VictorLogger.info("✓ Manual commit successful");
 
         } catch (Exception e) {
             tx.rollback();
@@ -168,23 +169,23 @@ class TransactionTest {
         long count = userRepository.count();
         assertEquals(2, count, "Should have 2 users after manual commit");
 
-        System.out.println("✓ Manual transaction completed");
+        VictorLogger.info("✓ Manual transaction completed");
     }
     
     @Test
     @Order(5)
     void testManualTransactionRollback() {
-        System.out.println("\n--- Test 5: Manual Transaction Rollback ---");
+        VictorLogger.info("\n--- Test 5: Manual Transaction Rollback ---");
         
         Transaction tx = victor.beginTransaction();
         try {
             UserDto user1 = new UserDto(null, "rollback1", "rollback1@example.com", 25, true, "Rollback One");
             userRepository.save(user1);
             
-            System.out.println("✓ User saved in manual transaction");
+            VictorLogger.info("✓ User saved in manual transaction");
 
             tx.rollback();
-            System.out.println("✓ Manual rollback executed");
+            VictorLogger.info("✓ Manual rollback executed");
             
         } finally {
             tx.close();
@@ -196,24 +197,24 @@ class TransactionTest {
         Optional<UserDto> user = userRepository.findByUsername("rollback1");
         assertFalse(user.isPresent(), "User should NOT exist after rollback");
         
-        System.out.println("✓ Manual rollback successful");
+        VictorLogger.info("✓ Manual rollback successful");
     }
     
     @Test
     @Order(6)
     void testAutoRollbackOnClose() {
-        System.out.println("\n--- Test 6: Auto-Rollback on Close ---");
+        VictorLogger.info("\n--- Test 6: Auto-Rollback on Close ---");
         
         Transaction tx = victor.beginTransaction();
         
         UserDto user = new UserDto(null, "autorollback", "auto@example.com", 25, true, "Auto Rollback");
         userRepository.save(user);
         
-        System.out.println("✓ User saved in transaction");
+        VictorLogger.info("✓ User saved in transaction");
         
         // Fermer sans commit → rollback automatique
         tx.close();
-        System.out.println("✓ Transaction closed without commit");
+        VictorLogger.info("✓ Transaction closed without commit");
         
         // Vérifier que les données ne sont pas présentes
         long count = userRepository.count();
@@ -222,13 +223,13 @@ class TransactionTest {
         Optional<UserDto> found = userRepository.findByUsername("autorollback");
         assertFalse(found.isPresent(), "User should NOT exist after auto-rollback");
         
-        System.out.println("✓ Auto-rollback on close successful");
+        VictorLogger.info("✓ Auto-rollback on close successful");
     }
     
     @Test
     @Order(7)
     void testNestedTransactionThrowsException() {
-        System.out.println("\n--- Test 7: Nested Transaction (Should Fail) ---");
+        VictorLogger.info("\n--- Test 7: Nested Transaction (Should Fail) ---");
         
         // Les transactions imbriquées ne sont pas supportées
         assertThrows(VictorTransactionException.class, () -> {
@@ -244,19 +245,19 @@ class TransactionTest {
             });
         });
         
-        System.out.println("✓ Nested transaction correctly rejected");
+        VictorLogger.info("✓ Nested transaction correctly rejected");
     }
     
     @Test
     @Order(8)
     void testTransactionIsolation() {
-        System.out.println("\n--- Test 8: Transaction Isolation ---");
+        VictorLogger.info("\n--- Test 8: Transaction Isolation ---");
         
         // Créer un utilisateur
         UserDto initialUser = new UserDto(null, "isolated", "isolated@example.com", 25, true, "Isolated User");
         UserDto saved = userRepository.save(initialUser);
         
-        System.out.println("✓ Initial user created with ID: " + saved.id());
+        VictorLogger.info("✓ Initial user created with ID: " + saved.id());
 
         victor.transaction(() -> {
             Optional<UserDto> user = userRepository.findById(saved.id());
@@ -272,7 +273,7 @@ class TransactionTest {
             );
             
             userRepository.save(updated);
-            System.out.println("✓ User updated in transaction");
+            VictorLogger.info("✓ User updated in transaction");
 
             Optional<UserDto> inTx = userRepository.findById(saved.id());
             assertEquals("updated@example.com", inTx.get().email());
@@ -285,22 +286,22 @@ class TransactionTest {
         assertEquals("updated@example.com", afterCommit.get().email());
         assertEquals(30, afterCommit.get().age());
         
-        System.out.println("✓ Transaction isolation working correctly");
+        VictorLogger.info("✓ Transaction isolation working correctly");
     }
     
     @Test
     @Order(9)
     void testMultipleOperationsInTransaction() {
-        System.out.println("\n--- Test 9: Multiple Operations in Transaction ---");
+        VictorLogger.info("\n--- Test 9: Multiple Operations in Transaction ---");
         
         victor.transaction(() -> {
             UserDto user1 = new UserDto(null, "user1", "user1@example.com", 25, true, "User One");
             UserDto saved1 = userRepository.save(user1);
-            System.out.println("✓ User1 inserted");
+            VictorLogger.info("✓ User1 inserted");
 
             UserDto user2 = new UserDto(null, "user2", "user2@example.com", 30, true, "User Two");
             UserDto saved2 = userRepository.save(user2);
-            System.out.println("✓ User2 inserted");
+            VictorLogger.info("✓ User2 inserted");
 
             UserDto updated = new UserDto(
                 saved1.id(),
@@ -311,15 +312,15 @@ class TransactionTest {
                 saved1.name()
             );
             userRepository.save(updated);
-            System.out.println("✓ User1 updated");
+            VictorLogger.info("✓ User1 updated");
 
             Optional<UserDto> found = userRepository.findByUsername("user2");
             assertTrue(found.isPresent(), "User2 should be found");
-            System.out.println("✓ User2 found");
+            VictorLogger.info("✓ User2 found");
 
             long count = userRepository.count();
             assertEquals(2, count, "Should have 2 users");
-            System.out.println("✓ Count = " + count);
+            VictorLogger.info("✓ Count = " + count);
         });
 
         long finalCount = userRepository.count();
@@ -330,6 +331,6 @@ class TransactionTest {
         assertEquals("updated1@example.com", user1.get().email());
         assertEquals(26, user1.get().age());
         
-        System.out.println("✓ Multiple operations in transaction successful");
+        VictorLogger.info("✓ Multiple operations in transaction successful");
     }
 }

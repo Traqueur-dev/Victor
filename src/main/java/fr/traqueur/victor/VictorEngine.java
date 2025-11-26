@@ -10,6 +10,7 @@ import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.managers.TransactionManager;
 import fr.traqueur.victor.proxy.RepositoryProxyHandler;
 import fr.traqueur.victor.proxy.ServiceProxyHandler;
+import fr.traqueur.victor.utils.VictorLogger;
 
 public final class VictorEngine {
 
@@ -29,10 +30,7 @@ public final class VictorEngine {
         this.sqlExecutor = new SqlExecutor(connectionManager, dialect);
         this.transactionManager = new TransactionManager(connectionManager);
 
-        System.out.println("Victor Engine initialized with dialect: " + dialect.getName());
-        if (configuration.showSql()) {
-            System.out.println("SQL logging enabled");
-        }
+        VictorLogger.debug("Victor Engine initialized with dialect: " + dialect.getName());
     }
 
     public <T extends Repository<?, ?, ?>> T createRepository(Class<T> repositoryInterface) {
@@ -52,12 +50,12 @@ public final class VictorEngine {
             return;
         }
 
-        System.out.println("Running auto-migration...");
+        VictorLogger.info("Running auto-migration...");
         AutoMigration autoMigration = new AutoMigration(
                 configuration, sqlExecutor, dialect
         );
         autoMigration.runMigrations();
-        System.out.println("Auto-migration completed");
+        VictorLogger.info("Auto-migration completed");
     }
 
     public void close() {
@@ -67,7 +65,7 @@ public final class VictorEngine {
 
         try {
             connectionManager.close();
-            System.out.println("Victor Engine closed");
+            VictorLogger.info("Victor Engine closed");
         } catch (Exception e) {
             System.err.println("Error closing Victor Engine: " + e.getMessage());
         } finally {

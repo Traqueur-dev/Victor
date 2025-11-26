@@ -4,6 +4,7 @@ import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.test.dto.UserDto;
 import fr.traqueur.victor.test.entities.User;
 import fr.traqueur.victor.test.repository.UserRepository;
+import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.*;
 
 import java.util.List;
@@ -34,7 +35,7 @@ class CustomQueryTest {
     }
     
     private static void insertTestData() {
-        System.out.println("\n=== Inserting test data ===");
+        VictorLogger.info("\n=== Inserting test data ===");
         
         userRepository.save(new UserDto(null, "alice", "alice@example.com", 25, true, "Alice"));
         userRepository.save(new UserDto(null, "bob", "bob@example.com", 30, true, "Bob"));
@@ -42,13 +43,13 @@ class CustomQueryTest {
         userRepository.save(new UserDto(null, "diana", "diana@example.com", 35, true, "Diana"));
         userRepository.save(new UserDto(null, "eve", "eve@example.com", 28, false, "Eve"));
         
-        System.out.println("✓ Test data inserted\n");
+        VictorLogger.info("✓ Test data inserted\n");
     }
     
     @Test
     @Order(1)
     void testCustomQueryWithPositionalParameters() {
-        System.out.println("\n--- Test 1: Custom Query with Positional Parameters ---");
+        VictorLogger.info("\n--- Test 1: Custom Query with Positional Parameters ---");
         
         List<UserDto> results = userRepository.findActiveUsersOlderThan(25, true);
         
@@ -60,13 +61,13 @@ class CustomQueryTest {
             assertTrue(user.active());
         });
         
-        System.out.println("✓ Found " + results.size() + " active users older than 25");
+        VictorLogger.info("✓ Found " + results.size() + " active users older than 25");
     }
     
     @Test
     @Order(2)
     void testCustomQueryWithNamedParameters() {
-        System.out.println("\n--- Test 2: Custom Query with Named Parameters ---");
+        VictorLogger.info("\n--- Test 2: Custom Query with Named Parameters ---");
         
         Optional<UserDto> result = userRepository.findByUsernameCustom("alice");
         
@@ -74,13 +75,13 @@ class CustomQueryTest {
         assertEquals("alice", result.get().username());
         assertEquals("alice@example.com", result.get().email());
         
-        System.out.println("✓ Found user: " + result.get().username());
+        VictorLogger.info("✓ Found user: " + result.get().username());
     }
     
     @Test
     @Order(3)
     void testCustomCountQuery() {
-        System.out.println("\n--- Test 3: Custom COUNT Query ---");
+        VictorLogger.info("\n--- Test 3: Custom COUNT Query ---");
         
         long activeCount = userRepository.countByActive(true);
         long inactiveCount = userRepository.countByActive(false);
@@ -88,14 +89,14 @@ class CustomQueryTest {
         assertEquals(3, activeCount);  // alice, bob, diana
         assertEquals(2, inactiveCount); // charlie, eve
         
-        System.out.println("✓ Active users: " + activeCount);
-        System.out.println("✓ Inactive users: " + inactiveCount);
+        VictorLogger.info("✓ Active users: " + activeCount);
+        VictorLogger.info("✓ Inactive users: " + inactiveCount);
     }
 
     @Test
     @Order(4)
     void testCustomUpdateQuery() {
-        System.out.println("\n--- Test 4: Custom UPDATE Query ---");
+        VictorLogger.info("\n--- Test 4: Custom UPDATE Query ---");
 
         // Désactiver les utilisateurs de moins de 25 ans (strictement)
         int updatedRows = userRepository.updateActiveByAge(false, 25);
@@ -110,16 +111,16 @@ class CustomQueryTest {
         assertTrue(alice.isPresent());
         assertTrue(alice.get().active());
 
-        System.out.println("✓ Updated " + updatedRows + " user(s)");
+        VictorLogger.info("✓ Updated " + updatedRows + " user(s)");
     }
     
     @Test
     @Order(5)
     void testCustomDeleteQuery() {
-        System.out.println("\n--- Test 5: Custom DELETE Query ---");
+        VictorLogger.info("\n--- Test 5: Custom DELETE Query ---");
         
         long countBefore = userRepository.count();
-        System.out.println("Users before delete: " + countBefore);
+        VictorLogger.info("Users before delete: " + countBefore);
         
         // Supprimer les utilisateurs de moins de 25 ans
         int deletedRows = userRepository.deleteByAgeLessThan(25);
@@ -129,15 +130,15 @@ class CustomQueryTest {
         long countAfter = userRepository.count();
         assertEquals(countBefore - deletedRows, countAfter);
         
-        System.out.println("✓ Deleted " + deletedRows + " users");
-        System.out.println("Users after delete: " + countAfter);
+        VictorLogger.info("✓ Deleted " + deletedRows + " users");
+        VictorLogger.info("Users after delete: " + countAfter);
     }
     
     @AfterAll
     static void tearDown() {
         if (victor != null) {
             victor.close();
-            System.out.println("\n✓ Victor closed");
+            VictorLogger.info("\n✓ Victor closed");
         }
     }
 }
