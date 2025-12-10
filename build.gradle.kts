@@ -200,9 +200,7 @@ publishing {
 
         // Publication du JAR all-dialects (fusion de tous les dialectes sans le core)
         create<MavenPublication>("allDialects") {
-            artifact(allDialectsJar) {
-                classifier = ""
-            }
+            artifact(allDialectsJar)
             groupId = "fr.traqueur.victor"
             artifactId = "all-dialects"
             version = rootProject.version.toString()
