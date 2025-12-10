@@ -2,8 +2,7 @@ import java.util.*
 
 plugins {
     id("java-library")
-    id("re.alwyn974.groupez.publish") version "1.0.0"
-    id("com.gradleup.shadow") version "9.0.0-beta11"
+    id("maven-publish")
 }
 
 group = "fr.traqueur"
@@ -20,7 +19,6 @@ rootProject.extra.properties["sha"]?.let { sha ->
 allprojects {
     apply {
         plugin("java-library")
-        plugin("com.gradleup.shadow")
     }
 
     repositories {
@@ -83,25 +81,81 @@ tasks.register("generateVersionProperties") {
     }
 }
 
-tasks.build {
-    dependsOn(tasks.shadowJar)
-}
-
-// Shadow JAR principal - combine core + tous les dialectes
-tasks.shadowJar {
-    archiveClassifier.set("all-dialects")
+// Tâche custom pour créer le JAR all-dialects (fusion de tous les dialectes)
+val allDialectsJar by tasks.registering(Jar::class) {
+    archiveBaseName.set(rootProject.name+"-all-dialects")
+    archiveVersion.set(rootProject.version.toString())
+    archiveClassifier.set("")
     destinationDirectory.set(rootProject.extra["targetFolder"] as File)
 
-    // Inclure tous les sous-projets dialectes
-    dependsOn(project(":dialects").subprojects.map { it.tasks.jar })
-    from(project(":dialects").subprojects.map { it.tasks.jar })
+    // Inclure uniquement les classes compilées des dialectes
+    project(":dialects").subprojects.forEach { dialectProject ->
+        from(dialectProject.sourceSets.main.get().output)
+        dependsOn(dialectProject.tasks.named("classes"))
+    }
 
-    // Fusionner les META-INF/services automatiquement
-    mergeServiceFiles()
+    // Fusionner les fichiers META-INF/services pour le SPI
+    filesMatching("META-INF/services/*") {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+
+    // Stratégie par défaut pour les autres fichiers
+    duplicatesStrategy = DuplicatesStrategy.WARN
+
+    manifest {
+        attributes(
+            mapOf(
+                "Implementation-Title" to "Victor All Dialects",
+                "Implementation-Version" to rootProject.version,
+                "Implementation-Vendor" to "fr.traqueur"
+            )
+        )
+    }
+
+    // Fusion manuelle des fichiers SPI
+    doLast {
+        val jarFile = archiveFile.get().asFile
+        val tempDir = file("${buildDir}/tmp/all-dialects-merge")
+        tempDir.deleteRecursively()
+        tempDir.mkdirs()
+        ant.invokeMethod("unzip", mapOf("src" to jarFile, "dest" to tempDir))
+        val servicesDir = file("${tempDir}/META-INF/services")
+        if (servicesDir.exists()) {
+            servicesDir.listFiles()?.forEach { serviceFile ->
+                if (serviceFile.isFile) {
+                    val implementations = mutableSetOf<String>()
+                    project(":dialects").subprojects.forEach { dialectProject ->
+                        val dialectServiceFile =
+                            file("${dialectProject.buildDir}/resources/main/META-INF/services/${serviceFile.name}")
+                        if (dialectServiceFile.exists()) {
+                            implementations.addAll(dialectServiceFile.readLines().filter { it.isNotBlank() })
+                        }
+                    }
+                    serviceFile.writeText(implementations.joinToString("\n") + "\n")
+                }
+            }
+        }
+
+        // Re-créer le JAR
+        ant.invokeMethod(
+            "jar", mapOf(
+                "destfile" to jarFile,
+                "basedir" to tempDir,
+                "manifest" to file("${tempDir}/META-INF/MANIFEST.MF")
+            )
+        )
+
+        tempDir.deleteRecursively()
+    }
+
+}
+
+tasks.build {
+    dependsOn(allDialectsJar)
 }
 
 tasks.jar {
-    archiveClassifier.set("core")
+    archiveClassifier.set("")
     destinationDirectory.set(rootProject.extra["targetFolder"] as File)
 }
 
@@ -114,7 +168,44 @@ java {
     withJavadocJar()
 }
 
-publishConfig {
-    githubOwner = "Traqueur-dev"
-    useRootProjectName = true
+publishing {
+    repositories {
+        maven {
+            val repository = System.getProperty("repository.name", "snapshots")
+            val repoType = repository.lowercase()
+
+            name = "groupez${repository.replaceFirstChar { it.uppercase() }}"
+            url = uri("https://repo.groupez.dev/$repoType")
+
+            credentials {
+                username = findProperty("${name}Username") as String?
+                    ?: System.getenv("MAVEN_USERNAME")
+                password = findProperty("${name}Password") as String?
+                    ?: System.getenv("MAVEN_PASSWORD")
+            }
+
+            authentication {
+                create<BasicAuthentication>("basic")
+            }
+        }
+    }
+
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            groupId = "fr.traqueur.victor"
+            artifactId = "victor-core"
+            version = rootProject.version.toString()
+        }
+
+        // Publication du JAR all-dialects (fusion de tous les dialectes sans le core)
+        create<MavenPublication>("allDialects") {
+            artifact(allDialectsJar) {
+                classifier = ""
+            }
+            groupId = "fr.traqueur.victor"
+            artifactId = "all-dialects"
+            version = rootProject.version.toString()
+        }
+    }
 }

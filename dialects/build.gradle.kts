@@ -3,7 +3,7 @@
 // Configuration parent pour tous les dialectes
 subprojects {
     apply(plugin = "java-library")
-    apply(plugin = "com.gradleup.shadow")
+    apply(plugin = "maven-publish")
 
     group = parent!!.group
     version = parent!!.version
@@ -32,12 +32,35 @@ subprojects {
         }
     }
 
-    // Shadow JAR pour chaque dialecte individuellement
-    tasks.shadowJar {
-        archiveClassifier.set("")
-        destinationDirectory.set(rootProject.layout.buildDirectory.dir("libs"))
+    configure<PublishingExtension> {
+        repositories {
+            maven {
+                val repository = System.getProperty("repository.name", "snapshots")
+                val repoType = repository.lowercase()
 
-        // Merger les services pour ce dialecte
-        mergeServiceFiles()
+                name = "groupez${repository.replaceFirstChar { it.uppercase() }}"
+                url = uri("https://repo.groupez.dev/$repoType")
+
+                credentials {
+                    username = findProperty("${name}Username") as String?
+                        ?: System.getenv("MAVEN_USERNAME")
+                    password = findProperty("${name}Password") as String?
+                        ?: System.getenv("MAVEN_PASSWORD")
+                }
+
+                authentication {
+                    create<BasicAuthentication>("basic")
+                }
+            }
+        }
+
+        publications {
+            create<MavenPublication>("maven") {
+                from(components["java"])
+                groupId = "fr.traqueur.victor"
+                artifactId = project.name
+                version = rootProject.version.toString()
+            }
+        }
     }
 }
