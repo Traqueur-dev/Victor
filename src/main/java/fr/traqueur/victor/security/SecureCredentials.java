@@ -124,4 +124,13 @@ public final class SecureCredentials implements AutoCloseable {
             throw new IllegalStateException("Credentials have been cleared");
         }
     }
+
+    /**
+     * Prevents accidental logging of credentials.
+     * Returns a safe representation without exposing password.
+     */
+    @Override
+    public String toString() {
+        return "SecureCredentials{username='" + username + "', cleared=" + cleared + "}";
+    }
 }

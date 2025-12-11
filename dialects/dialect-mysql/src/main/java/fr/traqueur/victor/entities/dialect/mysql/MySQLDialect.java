@@ -56,7 +56,7 @@ public class MySQLDialect implements Dialect {
     public Properties getDefaultConnectionProperties() {
         Properties props = new Properties();
 
-        props.setProperty("characterEncoding", "utf8mb4");
+        props.setProperty("characterEncoding", "UTF-8");
         props.setProperty("useUnicode", "true");
 
         // Timezone

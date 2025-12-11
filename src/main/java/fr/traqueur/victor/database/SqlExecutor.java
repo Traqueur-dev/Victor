@@ -19,14 +19,7 @@ import java.util.*;
 /**
  * Executes SQL statements with proper resource management and logging.
  */
-public final class SqlExecutor {
-    private final ConnectionManager connectionManager;
-    private final Dialect dialect;
-
-    public SqlExecutor(ConnectionManager connectionManager, Dialect dialect) {
-        this.connectionManager = connectionManager;
-        this.dialect = dialect;
-    }
+public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) {
 
     public boolean isShowSql() {
         return connectionManager.getConfiguration().showSql();
@@ -175,6 +168,35 @@ public final class SqlExecutor {
         }
 
         Connection conn = connectionManager.getConnection();
+
+        // Check if dialect supports standard generated keys
+        if (!dialect.supportsStandardGeneratedKeys()) {
+            // Use dialect-specific method (e.g., SQLite's last_insert_rowid())
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                setParameters(stmt, params);
+
+                int rowsAffected = stmt.executeUpdate();
+                if (rowsAffected == 0) {
+                    throw new VictorException("Insert failed, no rows affected");
+                }
+
+                // Execute dialect-specific query to get last inserted ID
+                String lastIdSql = dialect.getLastInsertIdSql();
+                try (PreparedStatement idStmt = conn.prepareStatement(lastIdSql);
+                     ResultSet rs = idStmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getObject(1, idType);
+                    }
+                    throw new VictorException("Insert failed, no generated key returned");
+                }
+            } catch (SQLException e) {
+                throw new VictorException("Failed to execute insert: " + sql, e);
+            } finally {
+                closeConnectionIfNotTransactional(conn);
+            }
+        }
+
+        // Standard JDBC approach for most databases
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             setParameters(stmt, params);
 
@@ -321,11 +343,6 @@ public final class SqlExecutor {
         }
 
         return (T) constructor.newInstance(args);
-    }
-
-
-    public Dialect getDialect() {
-        return dialect;
     }
 
     public Object getFieldValue(ResultSet rs, FieldMetadata fieldMetadata) {

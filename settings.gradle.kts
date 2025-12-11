@@ -10,15 +10,11 @@ pluginManagement {
     }
 }
 
-
 include(":dialects")
 
 file("dialects").listFiles()?.forEach { file ->
-    if (file.isDirectory and !file.name.equals("build") && !file.name.equals("src")) {
+    if (file.isDirectory && !file.name.equals("build") && !file.name.equals("src")) {
         println("Include dialects:${file.name}")
         include(":dialects:${file.name}")
     }
 }
-
-include("dialects:dialect-mysql")
-include("dialects:dialect-postregresql")

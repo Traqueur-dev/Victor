@@ -11,6 +11,14 @@ subprojects {
     // Chaque dialecte dépend du core Victor
     dependencies {
         api(rootProject)
+
+        // Access to test classes from root project (AbstractDialectTest, User, UserRepository, etc.)
+        testImplementation(rootProject.sourceSets.test.get().output)
+
+        // Testcontainers for integration tests
+        testImplementation("org.testcontainers:junit-jupiter:1.19.0")
+        testImplementation("org.testcontainers:mysql:1.19.0")
+        testImplementation("org.testcontainers:postgresql:1.19.0")
     }
 
     java {

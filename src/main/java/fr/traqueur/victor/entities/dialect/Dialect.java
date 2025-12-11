@@ -63,4 +63,12 @@ public interface Dialect {
     default String[] getConnectionSetupSql() {
         return new String[0];
     }
+
+    default boolean supportsStandardGeneratedKeys() {
+        return true;
+    }
+
+    default String getLastInsertIdSql() {
+        return null;
+    }
 }

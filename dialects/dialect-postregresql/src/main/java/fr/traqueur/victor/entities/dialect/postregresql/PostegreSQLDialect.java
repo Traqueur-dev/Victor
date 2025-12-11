@@ -249,7 +249,7 @@ public class PostegreSQLDialect implements Dialect {
 
     @Override
     public String generateExists(EntityMetadata metadata) {
-        return String.format("SELECT EXISTS(SELECT 1 FROM %s WHERE %s = ?)",
+        return String.format("SELECT CASE WHEN EXISTS(SELECT 1 FROM %s WHERE %s = ?) THEN 1 ELSE 0 END",
                 getFullTableName(metadata),
                 quoteIdentifier(metadata.getIdField().getColumnName()));
     }

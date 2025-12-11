@@ -1,4 +1,4 @@
-import java.util.*
+import java.util.Locale
 
 plugins {
     id("java-library")
@@ -62,6 +62,8 @@ allprojects {
 
 dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.19.0")
+    testImplementation("org.testcontainers:mysql:1.19.0")
+    testImplementation("org.testcontainers:postgresql:1.19.0")
 }
 
 afterEvaluate {
@@ -115,7 +117,7 @@ val allDialectsJar by tasks.registering(Jar::class) {
     // Fusion manuelle des fichiers SPI
     doLast {
         val jarFile = archiveFile.get().asFile
-        val tempDir = file("${buildDir}/tmp/all-dialects-merge")
+        val tempDir = layout.buildDirectory.dir("tmp/all-dialects-merge").get().asFile
         tempDir.deleteRecursively()
         tempDir.mkdirs()
         ant.invokeMethod("unzip", mapOf("src" to jarFile, "dest" to tempDir))
@@ -126,7 +128,7 @@ val allDialectsJar by tasks.registering(Jar::class) {
                     val implementations = mutableSetOf<String>()
                     project(":dialects").subprojects.forEach { dialectProject ->
                         val dialectServiceFile =
-                            file("${dialectProject.buildDir}/resources/main/META-INF/services/${serviceFile.name}")
+                            dialectProject.layout.buildDirectory.file("resources/main/META-INF/services/${serviceFile.name}").get().asFile
                         if (dialectServiceFile.exists()) {
                             implementations.addAll(dialectServiceFile.readLines().filter { it.isNotBlank() })
                         }
