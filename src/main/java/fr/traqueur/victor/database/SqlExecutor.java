@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.UUID;
 
 /**
  * Executes SQL statements with proper resource management and logging.
@@ -126,7 +127,7 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
         Connection conn = connectionManager.getConnection();
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, id);
+            stmt.setObject(1, convertForJdbc(id));
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
@@ -149,7 +150,7 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
         Connection conn = connectionManager.getConnection();
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, id);
+            stmt.setObject(1, convertForJdbc(id));
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {
@@ -320,8 +321,24 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
     private void setParameters(PreparedStatement stmt, Object[] params) throws SQLException {
         for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
+            Object param = convertForJdbc(params[i]);
+            stmt.setObject(i + 1, param);
         }
+    }
+
+    /**
+     * Converts Java objects to JDBC-compatible types.
+     * Some types like UUID need to be converted to String to avoid
+     * binary serialization issues with certain JDBC drivers.
+     */
+    private Object convertForJdbc(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof UUID uuid) {
+            return uuid.toString();
+        }
+        return value;
     }
 
     @SuppressWarnings("unchecked")
