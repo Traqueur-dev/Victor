@@ -67,7 +67,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
             DTO dto = VictorConverter.modelToDto(model, dtoClass);
 
             DTO savedDto = repository().save(dto);
-            MODEL savedModel = VictorConverter.dtoToModel(savedDto, modelClass);
+            MODEL savedModel = savedDto.toModel();
 
             savedModel.afterSave();
             return savedModel;
@@ -80,7 +80,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     private Optional<MODEL> findById(ID id) {
         try {
             Optional<DTO> dtoOptional = repository().findById(id);
-            return dtoOptional.map(dto -> VictorConverter.dtoToModel(dto, modelClass));
+            return dtoOptional.map(Dto::toModel);
         } catch (Exception e) {
             throw new VictorException("Failed to find model by ID: " + id, e);
         }
@@ -90,7 +90,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         try {
             List<DTO> dtos = repository().findAll();
             return dtos.stream()
-                    .map(dto -> VictorConverter.dtoToModel(dto, modelClass))
+                    .map(Dto::toModel)
                     .toList();
         } catch (Exception e) {
             throw new VictorException("Failed to find all models", e);

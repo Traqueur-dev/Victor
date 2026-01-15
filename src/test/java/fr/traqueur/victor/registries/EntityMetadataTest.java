@@ -54,8 +54,7 @@ class EntityMetadataTest {
     @Test
     void testEntityMetadataCreation() {
         var metadata = EntityMetadata.of(TestUser.class);
-        
-        assertEquals(TestUser.class, metadata.getEntityClass());
+
         assertEquals("test_users", metadata.getTableName());
         assertEquals("test_schema", metadata.getSchema());
         assertEquals("test_schema.test_users", metadata.getFullTableName());

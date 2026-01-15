@@ -8,8 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public final class EntityMetadata {
-    
-    private final Class<?> entityClass;
+
     private final String tableName;
     private final String schema;
     private final FieldMetadata idField;
@@ -17,8 +16,6 @@ public final class EntityMetadata {
     private final Map<String, FieldMetadata> fieldMap;
     
     private EntityMetadata(Class<?> entityClass) {
-        this.entityClass = entityClass;
-        
         var entityAnnotation = entityClass.getAnnotation(Table.class);
         if (entityAnnotation == null) {
             throw new VictorConfigurationException("Class must be annotated with @Table: " + entityClass);
@@ -89,8 +86,7 @@ public final class EntityMetadata {
     private String camelToSnakeCase(String camelCase) {
         return camelCase.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
-    
-    public Class<?> getEntityClass() { return entityClass; }
+
     public String getTableName() { return tableName; }
     public String getSchema() { return schema; }
     public FieldMetadata getIdField() { return idField; }
