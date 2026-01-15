@@ -5,7 +5,7 @@ plugins {
     id("maven-publish")
 }
 
-group = "fr.traqueur"
+group = "fr.traqueur.victor"
 version = property("version") as String
 
 extra.set("targetFolder", file("target/"))
@@ -17,46 +17,48 @@ rootProject.extra.properties["sha"]?.let { sha ->
 }
 
 allprojects {
-    apply {
-        plugin("java-library")
-    }
-
     repositories {
         mavenCentral()
     }
 
-    dependencies {
-        api("org.slf4j:slf4j-api:2.0.9")
-        api("com.zaxxer:HikariCP:5.1.0")
-
-        testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
-        testImplementation("org.assertj:assertj-core:3.24.2")
-        testImplementation("org.mockito:mockito-core:5.7.0")
-        testImplementation("org.mockito:mockito-junit-jupiter:5.7.0")
-        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    }
-
-    java {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
-    }
-
-    tasks.withType<JavaCompile> {
-        options.compilerArgs.add("-parameters")
-    }
-
-    tasks.test {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
-            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-            showStandardStreams = false
+    if (name != "bom") {
+        apply {
+            plugin("java-library")
         }
 
-        jvmArgs(
-            "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.util=ALL-UNNAMED"
-        )
+        dependencies {
+            api("org.slf4j:slf4j-api:2.0.9")
+            api("com.zaxxer:HikariCP:5.1.0")
+
+            testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
+            testImplementation("org.assertj:assertj-core:3.24.2")
+            testImplementation("org.mockito:mockito-core:5.7.0")
+            testImplementation("org.mockito:mockito-junit-jupiter:5.7.0")
+            testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+        }
+
+        java {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
+
+        tasks.withType<JavaCompile> {
+            options.compilerArgs.add("-parameters")
+        }
+
+        tasks.test {
+            useJUnitPlatform()
+            testLogging {
+                events("passed", "skipped", "failed")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStandardStreams = false
+            }
+
+            jvmArgs(
+                "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+                "--add-opens", "java.base/java.util=ALL-UNNAMED"
+            )
+        }
     }
 }
 
@@ -195,7 +197,7 @@ publishing {
     publications {
         create<MavenPublication>("maven") {
             from(components["java"])
-            groupId = "fr.traqueur.victor"
+            groupId = rootProject.group.toString()
             artifactId = "victor-core"
             version = rootProject.version.toString()
         }
@@ -203,9 +205,22 @@ publishing {
         // Publication du JAR all-dialects (fusion de tous les dialectes sans le core)
         create<MavenPublication>("allDialects") {
             artifact(allDialectsJar)
-            groupId = "fr.traqueur.victor"
+            groupId = rootProject.group.toString()
             artifactId = "all-dialects"
             version = rootProject.version.toString()
+
+            pom {
+                withXml {
+                    val dependenciesNode = asNode().appendNode("dependencies")
+                    project(":dialects").subprojects.forEach { dialectProject ->
+                        val node = dependenciesNode.appendNode("dependency")
+                        node.appendNode("groupId", rootProject.group.toString())
+                        node.appendNode("artifactId", dialectProject.name)
+                        node.appendNode("version", rootProject.version.toString())
+                        node.appendNode("scope", "compile")
+                    }
+                }
+            }
         }
     }
 }

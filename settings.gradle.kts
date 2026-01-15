@@ -11,6 +11,7 @@ pluginManagement {
 }
 
 include(":dialects")
+include(":bom")
 
 file("dialects").listFiles()?.forEach { file ->
     if (file.isDirectory && !file.name.equals("build") && !file.name.equals("src")) {

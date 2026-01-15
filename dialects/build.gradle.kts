@@ -5,8 +5,8 @@ subprojects {
     apply(plugin = "java-library")
     apply(plugin = "maven-publish")
 
-    group = parent!!.group
-    version = parent!!.version
+    group = rootProject.group
+    version = rootProject.version
 
     // Chaque dialecte dépend du core Victor
     dependencies {
@@ -65,9 +65,9 @@ subprojects {
         publications {
             create<MavenPublication>("maven") {
                 from(components["java"])
-                groupId = "fr.traqueur.victor"
+                groupId = project.group.toString()
                 artifactId = project.name
-                version = rootProject.version.toString()
+                version = project.version.toString()
             }
         }
     }
