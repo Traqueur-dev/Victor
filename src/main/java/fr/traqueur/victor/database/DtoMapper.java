@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.UUID;
 
 public final class DtoMapper {
 
@@ -133,6 +134,12 @@ public final class DtoMapper {
         // String conversions
         if (targetType == String.class) {
             return value.toString();
+        }
+
+        if(targetType == UUID.class) {
+            if(value instanceof String str) {
+                return UUID.fromString(str);
+            }
         }
 
         // Number conversions
