@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class MySQLDialect implements Dialect {
@@ -169,34 +170,6 @@ public class MySQLDialect implements Dialect {
     }
 
     @Override
-    public String generateInsert(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String columns = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()))
-                .collect(Collectors.joining(", "));
-
-        String placeholders = nonIdFields.stream()
-                .map(f -> "?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("INSERT INTO %s (%s) VALUES (%s)",
-                getFullTableName(metadata), columns, placeholders);
-    }
-
-    @Override
-    public String generateUpdate(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String setClause = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()) + " = ?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("UPDATE %s SET %s WHERE %s = ?",
-                getFullTableName(metadata),
-                setClause,
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String generateUpsert(EntityMetadata metadata) {
         var allFields = metadata.getFields();
         var nonIdFields = metadata.getNonIdFields();
@@ -220,37 +193,6 @@ public class MySQLDialect implements Dialect {
                 insertPlaceholders,
                 updateSetClause
         );
-    }
-
-    @Override
-    public String generateDelete(EntityMetadata metadata) {
-        return String.format("DELETE FROM %s WHERE %s = ?",
-                getFullTableName(metadata),
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectById(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s WHERE %s = ?",
-                getFullTableName(metadata),
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectAll(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateCount(EntityMetadata metadata) {
-        return String.format("SELECT COUNT(*) FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateExists(EntityMetadata metadata) {
-        return String.format("SELECT 1 FROM %s WHERE %s = ? LIMIT 1",
-                getFullTableName(metadata),
-                quoteIdentifier(metadata.getIdField().getColumnName()));
     }
 
     @Override
@@ -286,6 +228,8 @@ public class MySQLDialect implements Dialect {
             return "TIMESTAMP";
         } else if (javaType == byte[].class) {
             return "BLOB";
+        } else if (javaType == UUID.class) {
+            return "VARCHAR(36)";
         } else {
             return "TEXT";  // Fallback
         }
@@ -294,13 +238,6 @@ public class MySQLDialect implements Dialect {
     @Override
     public String quoteIdentifier(String identifier) {
         return "`" + identifier + "`";
-    }
-
-    @Override
-    public String escapeLikePattern(String pattern) {
-        return pattern.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
     }
 
     @Override
@@ -337,15 +274,6 @@ public class MySQLDialect implements Dialect {
             );
         } else {
             return "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'";
-        }
-    }
-
-    private String getFullTableName(EntityMetadata metadata) {
-        if (metadata.getSchema() != null) {
-            return quoteIdentifier(metadata.getSchema()) + "." +
-                    quoteIdentifier(metadata.getTableName());
-        } else {
-            return quoteIdentifier(metadata.getTableName());
         }
     }
 }

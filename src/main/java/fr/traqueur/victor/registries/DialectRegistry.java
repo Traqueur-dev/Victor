@@ -38,17 +38,21 @@ public final class DialectRegistry {
     }
     
     private void loadDialects() {
-        ServiceLoader<Dialect> loader = ServiceLoader.load(Dialect.class);
-        
+        // Use the classloader of the Dialect interface to find SPI implementations
+        // This is important for plugin environments (like Minecraft) where the
+        // thread's context classloader may not have access to the plugin's JARs
+        ClassLoader classLoader = Dialect.class.getClassLoader();
+        ServiceLoader<Dialect> loader = ServiceLoader.load(Dialect.class, classLoader);
+
         for (Dialect dialect : loader) {
             registerDialect(dialect);
             VictorLogger.debug("Loaded dialect {}", dialect.getClass().getSimpleName());
         }
-        
+
         if (allDialects.isEmpty()) {
-            VictorLogger.info("No dialects registered");
+            VictorLogger.debug("No dialects loaded via SPI - dialects can be registered manually");
         } else {
-            VictorLogger.info("Loaded {} dialects", allDialects.size());
+            VictorLogger.info("Loaded {} dialect(s) via SPI", allDialects.size());
         }
     }
     

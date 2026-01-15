@@ -137,32 +137,6 @@ public class SQLiteDialect implements Dialect {
     }
 
     @Override
-    public String generateInsert(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String columns = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()))
-                .collect(Collectors.joining(", "));
-
-        String placeholders = nonIdFields.stream()
-                .map(f -> "?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("INSERT INTO %s (%s) VALUES (%s)",
-                getFullTableName(metadata), columns, placeholders);
-    }
-
-    @Override
-    public String generateUpdate(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String setClause = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()) + " = ?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("UPDATE %s SET %s WHERE %s = ?",
-                getFullTableName(metadata), setClause, quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String generateUpsert(EntityMetadata metadata) {
         var allFields = metadata.getFields();
         var nonIdFields = metadata.getNonIdFields();
@@ -190,34 +164,6 @@ public class SQLiteDialect implements Dialect {
     }
 
     @Override
-    public String generateDelete(EntityMetadata metadata) {
-        return String.format("DELETE FROM %s WHERE %s = ?",
-                getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectById(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s WHERE %s = ?",
-                getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectAll(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateCount(EntityMetadata metadata) {
-        return String.format("SELECT COUNT(*) FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateExists(EntityMetadata metadata) {
-        return String.format("SELECT 1 FROM %s WHERE %s = ? LIMIT 1",
-                getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata) {
         if (javaType == String.class) {
             return "TEXT";
@@ -235,6 +181,8 @@ public class SQLiteDialect implements Dialect {
             return "TEXT";
         } else if (javaType == byte[].class) {
             return "BLOB";
+        } else if (javaType == java.util.UUID.class) {
+            return "TEXT";
         } else {
             return "TEXT";
         }
@@ -243,13 +191,6 @@ public class SQLiteDialect implements Dialect {
     @Override
     public String quoteIdentifier(String identifier) {
         return "\"" + identifier + "\"";
-    }
-
-    @Override
-    public String escapeLikePattern(String pattern) {
-        return pattern.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
     }
 
     @Override
@@ -290,9 +231,5 @@ public class SQLiteDialect implements Dialect {
     @Override
     public String getLastInsertIdSql() {
         return "SELECT last_insert_rowid()";
-    }
-
-    private String getFullTableName(EntityMetadata metadata) {
-        return quoteIdentifier(metadata.getTableName());
     }
 }

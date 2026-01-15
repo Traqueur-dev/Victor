@@ -4,6 +4,7 @@ import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.utils.StringUtils;
 import fr.traqueur.victor.utils.VictorLogger;
 
 import java.util.ArrayList;
@@ -60,7 +61,7 @@ public final class DynamicQuerySqlGenerator {
         List<String> parts = new ArrayList<>();
         
         for (MethodNameParser.WhereCondition condition : conditions) {
-            String fieldName = toSnakeCase(condition.fieldName());
+            String fieldName = StringUtils.camelToSnakeCase(condition.fieldName());
             String columnName = findColumnName(fieldName);
             String sqlCondition = buildCondition(columnName, condition.operator());
             
@@ -116,7 +117,7 @@ public final class DynamicQuerySqlGenerator {
     private String buildOrderByClause(List<MethodNameParser.OrderByClause> orderByClauses) {
         return orderByClauses.stream()
             .map(clause -> {
-                String fieldName = toSnakeCase(clause.fieldName());
+                String fieldName = StringUtils.camelToSnakeCase(clause.fieldName());
                 String columnName = findColumnName(fieldName);
                 return dialect.quoteIdentifier(columnName) + " " + clause.direction();
             })
@@ -132,11 +133,6 @@ public final class DynamicQuerySqlGenerator {
 
         return fieldName;
     }
-
-    private String toSnakeCase(String camelCase) {
-        return camelCase.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
-    }
-
 
     private String getFullTableName() {
         if (entityMetadata.getSchema() != null) {

@@ -2,6 +2,7 @@ package fr.traqueur.victor.entities.metadata;
 
 import fr.traqueur.victor.annotations.*;
 import fr.traqueur.victor.exceptions.VictorException;
+import fr.traqueur.victor.utils.StringUtils;
 
 import java.lang.reflect.Field;
 
@@ -26,7 +27,7 @@ public final class FieldMetadata {
         
         var column = field.getAnnotation(Column.class);
         this.columnName = (column != null && !column.name().isEmpty()) ? 
-            column.name() : camelToSnakeCase(field.getName());
+            column.name() : StringUtils.camelToSnakeCase(field.getName());
         
         this.nullable = column == null || column.nullable();
         this.length = column != null ? column.length() : 255;
@@ -64,10 +65,6 @@ public final class FieldMetadata {
         } catch (IllegalAccessException e) {
             throw new VictorException("Failed to set value to field: " + field, e);
         }
-    }
-    
-    private String camelToSnakeCase(String camelCase) {
-        return camelCase.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
     
     public Field getField() { return field; }

@@ -2,6 +2,7 @@ package fr.traqueur.victor.entities.metadata;
 
 import fr.traqueur.victor.annotations.*;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
+import fr.traqueur.victor.utils.StringUtils;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -22,7 +23,7 @@ public final class EntityMetadata {
         }
         
         this.tableName = entityAnnotation.table().isEmpty() ? 
-            camelToSnakeCase(entityClass.getSimpleName()) : entityAnnotation.table();
+            StringUtils.camelToSnakeCase(entityClass.getSimpleName()) : entityAnnotation.table();
         this.schema = entityAnnotation.schema().isEmpty() ? null : entityAnnotation.schema();
         
         var fieldAnalysis = analyzeFields(entityClass);
@@ -83,10 +84,6 @@ public final class EntityMetadata {
                java.lang.reflect.Modifier.isTransient(field.getModifiers());
     }
     
-    private String camelToSnakeCase(String camelCase) {
-        return camelCase.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
-    }
-
     public String getTableName() { return tableName; }
     public String getSchema() { return schema; }
     public FieldMetadata getIdField() { return idField; }

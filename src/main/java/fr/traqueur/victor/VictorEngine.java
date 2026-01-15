@@ -27,6 +27,9 @@ public final class VictorEngine {
         this.configuration = configuration;
         this.dialect = configuration.dialect();
 
+        // Enable debug logging if showSql is enabled
+        VictorLogger.setDebugEnabled(configuration.showSql());
+
         // Initialize components using the dialect interface
         this.connectionManager = ConnectionManager.getInstance(configuration);
         this.sqlExecutor = new SqlExecutor(connectionManager, dialect);
@@ -69,7 +72,7 @@ public final class VictorEngine {
             connectionManager.close();
             VictorLogger.info("Victor Engine closed");
         } catch (Exception e) {
-            System.err.println("Error closing Victor Engine: " + e.getMessage());
+            VictorLogger.error("Error closing Victor Engine", e);
         } finally {
             closed = true;
         }

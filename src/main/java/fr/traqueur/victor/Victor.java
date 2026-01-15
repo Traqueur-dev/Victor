@@ -50,14 +50,11 @@ public final class Victor {
     }
 
     public static void connect(String jdbcUrl) {
-        if (defaultInstance != null) {
-            defaultInstance.close();
-        }
-        defaultInstance = configure()
+        setDefault(configure()
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
-                .build();
+                .build());
     }
 
     public static VictorBuilder configure() {
@@ -65,27 +62,21 @@ public final class Victor {
     }
 
     public static void autoConnect(String jdbcUrl) {
-        if (defaultInstance != null) {
-            defaultInstance.close();
-        }
-        defaultInstance = configure()
+        setDefault(configure()
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
                 .autoScanEntities()
-                .build();
+                .build());
     }
 
     public static void autoConnectPackages(String jdbcUrl, String... packages) {
-        if (defaultInstance != null) {
-            defaultInstance.close();
-        }
-        defaultInstance = configure()
+        setDefault(configure()
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
                 .autoScanEntities(packages)
-                .build();
+                .build());
     }
 
     public static Victor sqlite(String path) {
@@ -159,6 +150,9 @@ public final class Victor {
     }
 
     public static void setDefault(Victor victor) {
+        if (defaultInstance != null && defaultInstance != victor) {
+            defaultInstance.close();
+        }
         defaultInstance = victor;
     }
 

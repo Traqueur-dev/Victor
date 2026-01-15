@@ -117,32 +117,6 @@ public class H2Dialect implements Dialect {
     }
 
     @Override
-    public String generateInsert(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String columns = nonIdFields.stream()
-            .map(f -> quoteIdentifier(f.getColumnName()))
-            .collect(Collectors.joining(", "));
-        
-        String placeholders = nonIdFields.stream()
-            .map(f -> "?")
-            .collect(Collectors.joining(", "));
-        
-        return String.format("INSERT INTO %s (%s) VALUES (%s)",
-            getFullTableName(metadata), columns, placeholders);
-    }
-
-    @Override
-    public String generateUpdate(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String setClause = nonIdFields.stream()
-            .map(f -> quoteIdentifier(f.getColumnName()) + " = ?")
-            .collect(Collectors.joining(", "));
-        
-        return String.format("UPDATE %s SET %s WHERE %s = ?",
-            getFullTableName(metadata), setClause, quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String generateUpsert(EntityMetadata metadata) {
         StringBuilder sql = new StringBuilder();
         sql.append("MERGE INTO ").append(getFullTableName(metadata));
@@ -164,34 +138,6 @@ public class H2Dialect implements Dialect {
     }
 
     @Override
-    public String generateDelete(EntityMetadata metadata) {
-        return String.format("DELETE FROM %s WHERE %s = ?",
-            getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectById(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s WHERE %s = ?",
-            getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectAll(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateCount(EntityMetadata metadata) {
-        return String.format("SELECT COUNT(*) FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateExists(EntityMetadata metadata) {
-        return String.format("SELECT 1 FROM %s WHERE %s = ? LIMIT 1",
-            getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata) {
         if (javaType == String.class) {
             return "VARCHAR(" + fieldMetadata.getLength() + ")";
@@ -207,6 +153,8 @@ public class H2Dialect implements Dialect {
             return "REAL";
         } else if (javaType == java.time.LocalDateTime.class) {
             return "TIMESTAMP";
+        } else if (javaType == java.util.UUID.class) {
+            return "UUID";
         } else {
             return "CLOB"; // Default for unknown types
         }
@@ -215,13 +163,6 @@ public class H2Dialect implements Dialect {
     @Override
     public String quoteIdentifier(String identifier) {
         return "\"" + identifier + "\"";
-    }
-
-    @Override
-    public String escapeLikePattern(String pattern) {
-        return pattern.replace("\\", "\\\\")
-                     .replace("%", "\\%")
-                     .replace("_", "\\_");
     }
 
     @Override
@@ -267,13 +208,5 @@ public class H2Dialect implements Dialect {
             "SET MODE MySQL", // MySQL compatibility
             "SET DB_CLOSE_DELAY -1" // Keep database open
         };
-    }
-
-    private String getFullTableName(EntityMetadata metadata) {
-        if (metadata.getSchema() != null) {
-            return quoteIdentifier(metadata.getSchema()) + "." + quoteIdentifier(metadata.getTableName());
-        } else {
-            return quoteIdentifier(metadata.getTableName());
-        }
     }
 }

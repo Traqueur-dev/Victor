@@ -10,17 +10,30 @@ import org.slf4j.LoggerFactory;
 public final class VictorLogger {
 
     private static final Logger logger = LoggerFactory.getLogger("Victor");
+    private static boolean debugEnabled = false;
 
     private VictorLogger() {
         // Utility class
     }
 
+    public static void setDebugEnabled(boolean enabled) {
+        debugEnabled = enabled;
+    }
+
+    public static boolean isDebugEnabled() {
+        return debugEnabled;
+    }
+
     public static void debug(String message) {
-        logger.debug(message);
+        if (debugEnabled) {
+            logger.info(message);
+        }
     }
 
     public static void debug(String format, Object... args) {
-        logger.debug(format, args);
+        if (debugEnabled) {
+            logger.info(format, args);
+        }
     }
 
     public static void info(String message) {
@@ -52,6 +65,8 @@ public final class VictorLogger {
     }
 
     public static void error(String format, Object... args) {
+        // SLF4J automatically extracts the last argument if it's a Throwable
+        // and prints its stack trace
         logger.error(format, args);
     }
 }

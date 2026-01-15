@@ -1,6 +1,7 @@
 package fr.traqueur.victor.entities.transaction;
 
 import fr.traqueur.victor.exceptions.VictorTransactionException;
+import fr.traqueur.victor.utils.VictorLogger;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -79,7 +80,7 @@ public final class TransactionImpl implements Transaction {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.err.println("Warning: Failed to restore auto-commit: " + e.getMessage());
+            VictorLogger.warn("Failed to restore auto-commit: {}", e.getMessage());
         }
 
         TransactionContext.clearCurrentTransaction();

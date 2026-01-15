@@ -168,34 +168,6 @@ public class PostegreSQLDialect implements Dialect {
     }
 
     @Override
-    public String generateInsert(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String columns = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()))
-                .collect(Collectors.joining(", "));
-
-        String placeholders = nonIdFields.stream()
-                .map(f -> "?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("INSERT INTO %s (%s) VALUES (%s)",
-                getFullTableName(metadata), columns, placeholders);
-    }
-
-    @Override
-    public String generateUpdate(EntityMetadata metadata) {
-        var nonIdFields = metadata.getNonIdFields();
-        String setClause = nonIdFields.stream()
-                .map(f -> quoteIdentifier(f.getColumnName()) + " = ?")
-                .collect(Collectors.joining(", "));
-
-        return String.format("UPDATE %s SET %s WHERE %s = ?",
-                getFullTableName(metadata),
-                setClause,
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
     public String generateUpsert(EntityMetadata metadata) {
 
         var allFields = metadata.getFields();
@@ -221,30 +193,6 @@ public class PostegreSQLDialect implements Dialect {
                 quoteIdentifier(metadata.getIdField().getColumnName()),
                 updateSetClause
         );
-    }
-
-    @Override
-    public String generateDelete(EntityMetadata metadata) {
-        return String.format("DELETE FROM %s WHERE %s = ?",
-                getFullTableName(metadata),
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectById(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s WHERE %s = ?",
-                getFullTableName(metadata),
-                quoteIdentifier(metadata.getIdField().getColumnName()));
-    }
-
-    @Override
-    public String generateSelectAll(EntityMetadata metadata) {
-        return String.format("SELECT * FROM %s", getFullTableName(metadata));
-    }
-
-    @Override
-    public String generateCount(EntityMetadata metadata) {
-        return String.format("SELECT COUNT(*) FROM %s", getFullTableName(metadata));
     }
 
     @Override
@@ -298,13 +246,6 @@ public class PostegreSQLDialect implements Dialect {
     }
 
     @Override
-    public String escapeLikePattern(String pattern) {
-        return pattern.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-    }
-
-    @Override
     public boolean supportsSchemas() {
         return true;
     }
@@ -322,15 +263,6 @@ public class PostegreSQLDialect implements Dialect {
     @Override
     public boolean isEmbedded() {
         return false;
-    }
-
-    private String getFullTableName(EntityMetadata metadata) {
-        if (metadata.getSchema() != null) {
-            return quoteIdentifier(metadata.getSchema()) + "." +
-                    quoteIdentifier(metadata.getTableName());
-        } else {
-            return quoteIdentifier(metadata.getTableName());
-        }
     }
 
     @Override
