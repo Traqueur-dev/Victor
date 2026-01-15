@@ -46,13 +46,10 @@ public final class DialectRegistry {
         }
         
         if (allDialects.isEmpty()) {
-            throw new VictorConfigurationException(
-                "No dialect implementations found! Make sure to include at least one dialect module " +
-                "(e.g., victor-dialect-h2, victor-dialect-sqlite, etc.) in your classpath."
-            );
+            VictorLogger.info("No dialects registered");
+        } else {
+            VictorLogger.info("Loaded {} dialects", allDialects.size());
         }
-
-        VictorLogger.info("Loaded {} dialects", allDialects.size());
     }
     
     public void registerDialect(Dialect dialect) {
