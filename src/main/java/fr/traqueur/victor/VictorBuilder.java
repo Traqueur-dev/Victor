@@ -145,10 +145,22 @@ public final class VictorBuilder {
         this.entityClasses.addAll(EntityScanner.scanForEntities());
         return this;
     }
+
+    public VictorBuilder autoScanEntities(ClassLoader classLoader) {
+        this.entityClasses.addAll(EntityScanner.scanForEntities(classLoader));
+        return this;
+    }
     
     public VictorBuilder autoScanEntities(String... packages) {
         for (String aPackage : packages) {
             this.entityClasses.addAll(EntityScanner.scanForEntities(aPackage));
+        }
+        return this;
+    }
+
+    public VictorBuilder autoScanEntities(ClassLoader classLoader, String... packages) {
+        for (String aPackage : packages) {
+            this.entityClasses.addAll(EntityScanner.scanForEntities(aPackage, classLoader));
         }
         return this;
     }

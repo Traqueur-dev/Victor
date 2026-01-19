@@ -29,6 +29,7 @@ allprojects {
         dependencies {
             api("org.slf4j:slf4j-api:2.0.9")
             api("com.zaxxer:HikariCP:5.1.0")
+            api("org.reflections:reflections:0.10.2")
 
             testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
             testImplementation("org.assertj:assertj-core:3.24.2")
