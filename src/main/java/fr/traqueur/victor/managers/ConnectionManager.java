@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Manages database connection pooling using HikariCP.
@@ -28,6 +29,7 @@ public final class ConnectionManager {
 
     private final VictorConfiguration configuration;
     private final HikariDataSource dataSource;
+    private final AtomicInteger refCount = new AtomicInteger(1);
     private volatile boolean closed = false;
 
     private ConnectionManager(VictorConfiguration configuration) {
@@ -39,7 +41,14 @@ public final class ConnectionManager {
 
     public static ConnectionManager getInstance(VictorConfiguration configuration) {
         String key = configuration.connectionUrl();
-        return instances.computeIfAbsent(key, k -> new ConnectionManager(configuration));
+        return instances.compute(key, (k, existing) -> {
+            if (existing != null && !existing.isClosed()) {
+                existing.refCount.incrementAndGet();
+                VictorLogger.debug("Reusing existing connection pool, ref count: {}", existing.refCount.get());
+                return existing;
+            }
+            return new ConnectionManager(configuration);
+        });
     }
 
     public Connection getConnection() {
@@ -137,6 +146,13 @@ public final class ConnectionManager {
     public void close() {
         if (closed) {
             return;
+        }
+
+        int remaining = refCount.decrementAndGet();
+        VictorLogger.debug("Connection pool close requested, remaining refs: {}", remaining);
+
+        if (remaining > 0) {
+            return; // Other consumers still using this connection pool
         }
 
         closed = true;
