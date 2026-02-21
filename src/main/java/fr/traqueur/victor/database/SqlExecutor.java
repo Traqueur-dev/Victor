@@ -1,7 +1,6 @@
 package fr.traqueur.victor.database;
 
 import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.entities.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
@@ -26,8 +25,6 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         return connectionManager.getConfiguration().showSql();
     }
 
-    // ========== Méthodes originales préservées ==========
-
     /**
      * Execute DDL statement (CREATE, ALTER, DROP)
      */
@@ -41,32 +38,6 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
             stmt.execute(sql);
         } catch (SQLException e) {
             throw new VictorException("Failed to execute DDL: " + sql, e);
-        } finally {
-            closeConnectionIfNotTransactional(conn);
-        }
-    }
-
-    /**
-     * Execute COUNT using dialect
-     */
-    public long executeCount(EntityMetadata metadata) {
-        String sql = dialect.generateCount(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            VictorLogger.debug("SQL: {}", sql);
-        }
-
-        Connection conn = connectionManager.getConnection();
-        try (PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            if (rs.next()) {
-                return rs.getLong(1);
-            }
-            return 0;
-
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute count query: " + sql, e);
         } finally {
             closeConnectionIfNotTransactional(conn);
         }
@@ -110,54 +81,6 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query for string set: " + sql, e);
-        } finally {
-            closeConnectionIfNotTransactional(conn);
-        }
-    }
-
-    /**
-     * Execute EXISTS check using dialect
-     */
-    public boolean executeExists(EntityMetadata metadata, Object id) {
-        String sql = dialect.generateExists(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            VictorLogger.debug("SQL: {}", sql);
-        }
-
-        Connection conn = connectionManager.getConnection();
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, convertForJdbc(id));
-            try (ResultSet rs = stmt.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute exists query: " + sql, e);
-        } finally {
-            closeConnectionIfNotTransactional(conn);
-        }
-    }
-
-    /**
-     * Execute DELETE using dialect
-     */
-    public void executeDelete(EntityMetadata metadata, Object id) {
-        String sql = dialect.generateDelete(metadata);
-
-        if (connectionManager.getConfiguration().showSql()) {
-            VictorLogger.debug("SQL: {}", sql);
-        }
-
-        Connection conn = connectionManager.getConnection();
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, convertForJdbc(id));
-
-            int rowsAffected = stmt.executeUpdate();
-            if (rowsAffected == 0) {
-                throw new VictorException("Delete failed, no rows affected for ID: " + id);
-            }
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute delete: " + sql, e);
         } finally {
             closeConnectionIfNotTransactional(conn);
         }
@@ -339,27 +262,6 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
             return uuid.toString();
         }
         return value;
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T mapResultToRecord(ResultSet rs, EntityMetadata metadata, Class<T> recordType) throws Exception {
-        var constructor = recordType.getDeclaredConstructors()[0];
-        var parameters = constructor.getParameters();
-        Object[] args = new Object[parameters.length];
-
-        for (int i = 0; i < parameters.length; i++) {
-            String paramName = parameters[i].getName();
-            FieldMetadata field = metadata.getFields().stream()
-                    .filter(f -> f.getField().getName().equals(paramName))
-                    .findFirst()
-                    .orElse(null);
-
-            if (field != null) {
-                args[i] = rs.getObject(field.getColumnName());
-            }
-        }
-
-        return (T) constructor.newInstance(args);
     }
 
     public Object getFieldValue(ResultSet rs, FieldMetadata fieldMetadata) {

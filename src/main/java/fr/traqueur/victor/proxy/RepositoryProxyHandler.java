@@ -7,9 +7,10 @@ import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
 import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
-import fr.traqueur.victor.registries.EntityMetadataRegistry;
+import fr.traqueur.victor.entities.metadata.RelationshipMetadata;
+import fr.traqueur.victor.registries.DtoMetadataRegistry;
 import fr.traqueur.victor.reflections.TypeResolver;
 import fr.traqueur.victor.database.SqlExecutor;
 import fr.traqueur.victor.entities.dialect.Dialect;
@@ -27,9 +28,6 @@ import java.util.regex.Pattern;
 public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID>
         implements InvocationHandler {
 
-    /**
-     * SQL keywords that should not be quoted in SQL queries.
-     */
     private static final Set<String> SQL_KEYWORDS = Set.of(
             "SELECT", "FROM", "WHERE", "AND", "OR", "ORDER", "BY", "GROUP",
             "HAVING", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON",
@@ -41,70 +39,20 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
 
     private final Class<DTO> dtoClass;
     private final Class<ID> idClass;
-    private final EntityMetadata entityMetadata;
+    private final DtoMetadata dtoMetadata;
     private final SqlExecutor sqlExecutor;
     private final DynamicQuerySqlGenerator sqlGenerator;
     private final Dialect dialect;
 
-    public RepositoryProxyHandler(Class<? extends Repository<DTO,MODEL,ID>> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public RepositoryProxyHandler(Class<? extends Repository<DTO, MODEL, ID>> repositoryInterface,
+                                  SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveRepositoryTypes(repositoryInterface);
         this.dtoClass = typeInfo.dtoClass();
-        Class<MODEL> modelClass = typeInfo.modelClass();
         this.idClass = typeInfo.idClass();
-        // Metadata from Model class for table structure and column names
-        this.entityMetadata = EntityMetadataRegistry.getInstance().getMetadata(modelClass);
+        this.dtoMetadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
         this.sqlExecutor = sqlExecutor;
         this.dialect = dialect;
-        this.sqlGenerator = new DynamicQuerySqlGenerator(
-                entityMetadata,
-                dialect,
-                sqlExecutor.isShowSql()
-        );
-
-        // Validate DTO/Model field mapping at startup
-        validateDtoModelMapping(modelClass);
-    }
-
-    /**
-     * Validates that all Model fields have corresponding fields in the DTO.
-     * This catches configuration errors early at startup rather than at runtime.
-     */
-    private void validateDtoModelMapping(Class<MODEL> modelClass) {
-        List<String> missingFields = new ArrayList<>();
-
-        for (FieldMetadata field : entityMetadata.getFields()) {
-            String fieldName = field.getField().getName();
-
-            if (!hasDtoField(fieldName)) {
-                missingFields.add(fieldName);
-            }
-        }
-
-        if (!missingFields.isEmpty()) {
-            throw new VictorException(
-                "DTO/Model field mapping error: The following fields from Model '" + modelClass.getSimpleName() +
-                "' are missing in DTO '" + dtoClass.getSimpleName() + "': " + missingFields +
-                ". DTO field names must match Model field names exactly."
-            );
-        }
-    }
-
-    /**
-     * Checks if the DTO class has a field with the given name.
-     */
-    private boolean hasDtoField(String fieldName) {
-        if (dtoClass.isRecord()) {
-            // For records, check record components
-            for (var component : dtoClass.getRecordComponents()) {
-                if (component.getName().equals(fieldName)) {
-                    return true;
-                }
-            }
-            return false;
-        } else {
-            // For classes, check declared fields in hierarchy
-            return findDtoField(dtoClass, fieldName) != null;
-        }
+        this.sqlGenerator = new DynamicQuerySqlGenerator(dtoMetadata, dialect, sqlExecutor.isShowSql());
     }
 
     @Override
@@ -126,7 +74,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
             case "count" -> count();
             case "saveAll" -> saveAll((Collection<DTO>) args[0]);
             case "deleteAll" -> {
-                if (args.length == 0) deleteAll();
+                if (args == null || args.length == 0) deleteAll();
                 else deleteAll((Collection<DTO>) args[0]);
                 yield null;
             }
@@ -140,12 +88,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         };
     }
 
-    /**
-     * Préprocesse la query SQL pour ajouter les quotes sur les identifiants.
-     *
-     * @param sql La query SQL brute
-     * @return La query avec les identifiants quotés selon le dialecte
-     */
     private String preprocessSqlQuery(String sql) {
         Pattern identifierPattern = Pattern.compile("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
         Matcher matcher = identifierPattern.matcher(sql);
@@ -154,26 +96,20 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         while (matcher.find()) {
             String identifier = matcher.group(1);
             String upperIdentifier = identifier.toUpperCase();
-
-            // Si c'est un keyword SQL ou un nombre, ne pas quoter
             if (SQL_KEYWORDS.contains(upperIdentifier) || identifier.matches("\\d+")) {
                 matcher.appendReplacement(result, identifier);
             } else {
-                // Quoter avec le dialecte
                 matcher.appendReplacement(result, dialect.quoteIdentifier(identifier));
             }
         }
         matcher.appendTail(result);
-
         return result.toString();
     }
 
-    private Object handleCustomQuery(Method method, Object[] args, QueryAnnotationParser.ParsedQueryAnnotation parsedQuery) {
+    private Object handleCustomQuery(Method method, Object[] args,
+                                     QueryAnnotationParser.ParsedQueryAnnotation parsedQuery) {
         try {
-            String sql = parsedQuery.toJdbcQuery();
-
-            sql = preprocessSqlQuery(sql);
-
+            String sql = preprocessSqlQuery(parsedQuery.toJdbcQuery());
             Object[] params = QueryAnnotationParser.mapParameterValues(method, args, parsedQuery.namedParameters());
 
             if (sqlExecutor.isShowSql()) {
@@ -183,13 +119,11 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
                 }
             }
 
-            // Exécuter selon le type de query
             return switch (parsedQuery.queryType()) {
                 case SELECT -> executeCustomSelect(method, sql, params);
                 case COUNT -> sqlExecutor.executeCount(sql, params);
                 case UPDATE, DELETE, INSERT -> sqlExecutor.executeUpdate(sql, params);
             };
-
         } catch (Exception e) {
             throw new VictorException("Failed to execute custom query for method: " + method.getName(), e);
         }
@@ -197,25 +131,20 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
 
     private Object executeCustomSelect(Method method, String sql, Object[] params) {
         Class<?> returnType = method.getReturnType();
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
 
         if (returnType == Optional.class) {
-            DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
-            return Optional.ofNullable(result);
+            return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, params, mapper));
         }
-
         if (List.class.isAssignableFrom(returnType)) {
             return sqlExecutor.executeQuery(sql, params, mapper);
         }
-
         if (returnType.isAssignableFrom(dtoClass)) {
             return sqlExecutor.executeQuerySingle(sql, params, mapper);
         }
-
         throw new VictorException(
                 "Unsupported return type for @Query method: " + returnType +
-                        ". Supported types: Optional<DTO>, List<DTO>, DTO"
-        );
+                ". Supported types: Optional<DTO>, List<DTO>, DTO");
     }
 
     private DTO save(DTO dto) {
@@ -225,14 +154,13 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
             } else {
                 return upsert(dto);
             }
-
         } catch (Exception e) {
             throw new VictorException("Failed to save entity: " + dto, e);
         }
     }
 
     private boolean shouldUseSimpleInsert(DTO dto) {
-        if (!entityMetadata.getIdField().isAutoGenerated()) {
+        if (!dtoMetadata.getIdField().isAutoGenerated()) {
             return false;
         }
         Object idValue = getDtoIdValue(dto);
@@ -247,10 +175,10 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private DTO insert(DTO dto) {
-        String sql = dialect.generateInsert(entityMetadata);
+        String sql = dialect.generateInsert(dtoMetadata);
         Object[] params = extractNonIdFieldValues(dto);
 
-        if (entityMetadata.getIdField().isAutoGenerated()) {
+        if (dtoMetadata.getIdField().isAutoGenerated()) {
             ID generatedId = sqlExecutor.executeInsertWithGeneratedKey(sql, params, idClass);
             return createDtoWithId(dto, generatedId);
         } else {
@@ -260,39 +188,40 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private DTO upsert(DTO dto) {
-        String sql = dialect.generateUpsert(entityMetadata);
+        String sql = dialect.generateUpsert(dtoMetadata);
         Object[] params = extractAllFieldValuesWithId(dto);
 
         int rowsAffected = sqlExecutor.executeUpdate(sql, params);
         if (rowsAffected == 0) {
-            Object idValue = getDtoIdValue(dto);
-            throw new VictorException("UPSERT failed, no rows affected: " + idValue);
+            throw new VictorException("UPSERT failed, no rows affected: " + getDtoIdValue(dto));
         }
-
         return dto;
     }
 
     private Optional<DTO> findById(ID id) {
-        String sql = dialect.generateSelectById(entityMetadata);
-        Object[] params = { id };
-
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
-        DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
-
-        return Optional.ofNullable(result);
+        String sql = dialect.generateSelectById(dtoMetadata);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+        return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, new Object[]{id}, mapper));
     }
 
     private List<DTO> findAll() {
-        String sql = dialect.generateSelectAll(entityMetadata);
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        String sql = dialect.generateSelectAll(dtoMetadata);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, null, mapper);
     }
 
     private void deleteById(ID id) {
-        String sql = dialect.generateDelete(entityMetadata);
-        Object[] params = { id };
+        // Clean ManyToMany junction tables first
+        for (RelationshipMetadata rel : dtoMetadata.getRelationships()) {
+            if (rel.getType() == RelationshipMetadata.RelationType.MANY_TO_MANY) {
+                String deleteSql = "DELETE FROM " + dialect.quoteIdentifier(rel.getJoinTable())
+                        + " WHERE " + dialect.quoteIdentifier(rel.getJoinColumn()) + " = ?";
+                sqlExecutor.executeUpdate(deleteSql, new Object[]{id});
+            }
+        }
 
-        int rowsAffected = sqlExecutor.executeUpdate(sql, params);
+        String sql = dialect.generateDelete(dtoMetadata);
+        int rowsAffected = sqlExecutor.executeUpdate(sql, new Object[]{id});
         if (rowsAffected == 0) {
             throw new VictorException("Entity not found for deletion: " + id);
         }
@@ -309,68 +238,41 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private boolean existsById(ID id) {
-        String sql = dialect.generateExists(entityMetadata);
-        Object[] params = { id };
-
-        long count = sqlExecutor.executeCount(sql, params);
-        return count > 0;
+        String sql = dialect.generateExists(dtoMetadata);
+        return sqlExecutor.executeCount(sql, new Object[]{id}) > 0;
     }
 
     private long count() {
-        String sql = dialect.generateCount(entityMetadata);
+        String sql = dialect.generateCount(dtoMetadata);
         return sqlExecutor.executeCount(sql, null);
     }
 
-    /**
-     * Saves all entities using JDBC batch operations for improved performance.
-     * Falls back to individual saves if batch processing fails.
-     */
     private List<DTO> saveAll(Collection<DTO> dtos) {
         List<DTO> dtoList = dtos.stream().toList();
+        if (dtoList.isEmpty()) return List.of();
 
-        if (dtoList.isEmpty()) {
-            return List.of();
-        }
-
-        // Check if all DTOs can use the same batch strategy (all inserts or all upserts)
         boolean allNew = dtoList.stream().allMatch(this::isDtoNew);
         boolean allExisting = dtoList.stream().noneMatch(this::isDtoNew);
 
-        if (entityMetadata.getIdField().isAutoGenerated() && allNew) {
+        if (dtoMetadata.getIdField().isAutoGenerated() && allNew) {
             return batchInsert(dtoList);
         } else if (allExisting) {
             return batchUpsert(dtoList);
         } else {
-            // Mixed new/existing entities - fallback to individual saves
             return dtoList.stream().map(this::save).toList();
         }
     }
 
-    /**
-     * Checks if a DTO represents a new entity (not yet persisted).
-     */
     private boolean isDtoNew(DTO dto) {
         Object idValue = getDtoIdValue(dto);
         return idValue == null || isDefaultId(idValue);
     }
 
-    /**
-     * Performs batch insert operations for new entities with auto-generated IDs.
-     * Currently falls back to individual inserts - full batch support requires
-     * connection access refactoring.
-     */
     private List<DTO> batchInsert(List<DTO> dtos) {
-        // TODO: Implement true JDBC batch operations when connection access is available
         return dtos.stream().map(this::save).toList();
     }
 
-    /**
-     * Performs batch upsert operations for existing entities.
-     * Currently falls back to individual upserts - full batch support requires
-     * connection access refactoring.
-     */
     private List<DTO> batchUpsert(List<DTO> dtos) {
-        // TODO: Implement true JDBC batch operations when connection access is available
         return dtos.stream().map(this::save).toList();
     }
 
@@ -379,74 +281,49 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private void deleteAll() {
-        String tableName = dialect.quoteIdentifier(entityMetadata.getTableName());
-        if (entityMetadata.getSchema() != null) {
-            tableName = dialect.quoteIdentifier(entityMetadata.getSchema()) + "." + tableName;
-        }
-        String sql = "DELETE FROM " + tableName;
-        sqlExecutor.executeUpdate(sql, null);
+        String tableName = dialect.getFullTableName(dtoMetadata);
+        sqlExecutor.executeUpdate("DELETE FROM " + tableName, null);
     }
 
     private Query<DTO> query() {
-        return new QueryProxyHandler<>(dtoClass, entityMetadata, sqlExecutor, dialect).createProxy();
+        return new QueryProxyHandler<>(dtoClass, dtoMetadata, sqlExecutor, dialect).createProxy();
     }
 
-    /**
-     * Gère les méthodes de query dynamiques (findByUsername, findByEmailAndActive, etc.).
-     */
     private Object handleDynamicFinderMethod(Method method, Object[] args) {
         try {
             MethodNameParser.ParsedQuery parsedQuery = MethodNameParser.parse(method);
-
             String sql = sqlGenerator.generateSql(parsedQuery);
-
             Object[] preparedArgs = prepareArguments(parsedQuery, args);
-
-            SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+            SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
 
             Class<?> returnType = method.getReturnType();
-
             if (returnType == Optional.class) {
-                DTO result = sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper);
-                return Optional.ofNullable(result);
-
+                return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper));
             } else if (List.class.isAssignableFrom(returnType)) {
                 return sqlExecutor.executeQuery(sql, preparedArgs, mapper);
-
             } else if (returnType.isAssignableFrom(dtoClass)) {
                 return sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper);
-
             } else {
-                throw new VictorException("Unsupported return type for dynamic query method: " + returnType + ". Supported types: Optional<DTO>, List<DTO>, DTO");
+                throw new VictorException("Unsupported return type for dynamic query: " + returnType);
             }
-
         } catch (Exception e) {
-            throw new VictorException("Failed to execute dynamic query method: " + method.getName(), e);
+            throw new VictorException("Failed to execute dynamic query: " + method.getName(), e);
         }
     }
 
     private Object[] prepareArguments(MethodNameParser.ParsedQuery parsedQuery, Object[] args) {
-        if (args == null || args.length == 0) {
-            return args;
-        }
+        if (args == null || args.length == 0) return args;
 
         Object[] prepared = new Object[args.length];
         int argIndex = 0;
 
         for (MethodNameParser.WhereCondition condition : parsedQuery.conditions()) {
-            if (!condition.requiresParameter()) {
-                continue;  // IsNull, IsNotNull n'ont pas de paramètre
-            }
-
+            if (!condition.requiresParameter()) continue;
             if (argIndex >= args.length) {
-                throw new VictorException(
-                        "Not enough arguments provided for query. Expected at least " +
-                                (argIndex + 1) + " but got " + args.length
-                );
+                throw new VictorException("Not enough arguments for query: expected at least " + (argIndex + 1));
             }
 
             Object arg = args[argIndex];
-
             if (condition.operator().equals("Like") || condition.operator().equals("NotLike")) {
                 if (arg instanceof String str) {
                     if (!str.contains("%") && !str.contains("_")) {
@@ -456,40 +333,64 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
                     }
                 }
             }
-
             prepared[argIndex] = arg;
             argIndex++;
         }
-
         return prepared;
     }
 
-    // ========== Helper Methods ==========
+    // ========== Value extraction ==========
 
     private Object[] extractNonIdFieldValues(DTO dto) {
-        return entityMetadata.getNonIdFields().stream()
-                .map(field -> getDtoFieldValue(dto, field.getField().getName()))
+        return dtoMetadata.getNonIdFields().stream()
+                .map(field -> getFieldValueForPersist(dto, field))
                 .toArray();
     }
 
     private Object[] extractAllFieldValuesWithId(DTO dto) {
-        return entityMetadata.getFields().stream()
-                .map(field -> getDtoFieldValue(dto, field.getField().getName()))
+        return dtoMetadata.getFields().stream()
+                .map(field -> getFieldValueForPersist(dto, field))
                 .toArray();
     }
 
     /**
-     * Extracts a field value from the DTO by field name.
-     * Supports both record DTOs and class DTOs.
+     * Gets the value for a field, handling synthetic FK fields by extracting
+     * the related DTO's ID from the relationship field.
      */
+    private Object getFieldValueForPersist(DTO dto, FieldMetadata field) {
+        if (field.isSyntheticFk()) {
+            return extractForeignKeyValue(dto, field.getColumnName());
+        }
+        return getDtoFieldValue(dto, field.getFieldName());
+    }
+
+    /**
+     * For a synthetic FK column, finds the owning relationship and extracts
+     * the related DTO's ID value.
+     */
+    private Object extractForeignKeyValue(DTO dto, String fkColumnName) {
+        RelationshipMetadata rel = dtoMetadata.getOwningSideRelationships().stream()
+                .filter(r -> r.getForeignKeyColumn().equals(fkColumnName))
+                .findFirst().orElse(null);
+        if (rel == null) return null;
+
+        Object relatedDto = getDtoFieldValue(dto, rel.getFieldName());
+        if (relatedDto == null) return null;
+
+        DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+        return targetMeta.getIdField().getValue(relatedDto);
+    }
+
+    private Object getDtoIdValue(DTO dto) {
+        return getDtoFieldValue(dto, dtoMetadata.getIdField().getFieldName());
+    }
+
     private Object getDtoFieldValue(DTO dto, String fieldName) {
         try {
             if (dtoClass.isRecord()) {
-                // For records, use the accessor method
                 Method accessor = dtoClass.getMethod(fieldName);
                 return accessor.invoke(dto);
             } else {
-                // For classes, use reflection on the field
                 java.lang.reflect.Field dtoField = findDtoField(dtoClass, fieldName);
                 if (dtoField != null) {
                     dtoField.setAccessible(true);
@@ -502,25 +403,11 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         }
     }
 
-    /**
-     * Gets the ID value from the DTO.
-     */
-    private Object getDtoIdValue(DTO dto) {
-        String idFieldName = entityMetadata.getIdField().getField().getName();
-        return getDtoFieldValue(dto, idFieldName);
-    }
-
-    /**
-     * Creates a new DTO instance with the generated ID.
-     * For records, creates a new instance. For classes, modifies and returns the existing instance.
-     */
     @SuppressWarnings("unchecked")
     private DTO createDtoWithId(DTO dto, ID generatedId) {
-        String idFieldName = entityMetadata.getIdField().getField().getName();
-
+        String idFieldName = dtoMetadata.getIdField().getFieldName();
         try {
             if (dtoClass.isRecord()) {
-                // For records, create a new instance with all values copied and ID set
                 var components = dtoClass.getRecordComponents();
                 Object[] args = new Object[components.length];
                 Class<?>[] types = new Class<?>[components.length];
@@ -528,20 +415,15 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
                 for (int i = 0; i < components.length; i++) {
                     String componentName = components[i].getName();
                     types[i] = components[i].getType();
-
                     if (componentName.equals(idFieldName)) {
                         args[i] = generatedId;
                     } else {
-                        // Get value from original DTO
                         Method accessor = dtoClass.getMethod(componentName);
                         args[i] = accessor.invoke(dto);
                     }
                 }
-
-                var constructor = dtoClass.getDeclaredConstructor(types);
-                return (DTO) constructor.newInstance(args);
+                return (DTO) dtoClass.getDeclaredConstructor(types).newInstance(args);
             } else {
-                // For classes, set the ID directly
                 java.lang.reflect.Field dtoField = findDtoField(dtoClass, idFieldName);
                 if (dtoField != null) {
                     dtoField.setAccessible(true);
@@ -554,9 +436,6 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         }
     }
 
-    /**
-     * Finds a field in a class hierarchy by name.
-     */
     private java.lang.reflect.Field findDtoField(Class<?> clazz, String fieldName) {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
@@ -569,15 +448,10 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         return null;
     }
 
-    private FieldMetadata findFieldByName(String name) {
-        return entityMetadata.getFields().stream()
-                .filter(f -> f.getField().getName().equals(name) || f.getColumnName().equals(name))
-                .findFirst()
-                .orElse(null);
-    }
-
     @SuppressWarnings("unchecked")
-    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T createProxy(Class<T> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID,
+            T extends Repository<DTO, MODEL, ID>> T createProxy(
+            Class<T> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new RepositoryProxyHandler<>(repositoryInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 repositoryInterface.getClassLoader(),

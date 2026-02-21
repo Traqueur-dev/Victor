@@ -1,6 +1,7 @@
 package fr.traqueur.victor.entities.dialect;
 
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.database.migration.IndexDefinition;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 
 import java.util.Properties;
@@ -18,9 +19,9 @@ public interface Dialect {
 
     Properties getDefaultConnectionProperties();
 
-    String generateCreateTable(EntityMetadata metadata);
+    String generateCreateTable(DtoMetadata metadata);
 
-    String generateUpsert(EntityMetadata metadata);
+    String generateUpsert(DtoMetadata metadata);
 
     String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata);
 
@@ -38,14 +39,14 @@ public interface Dialect {
 
     String generateListTablesSQL(String schemaName);
 
-    default String getFullTableName(EntityMetadata metadata) {
+    default String getFullTableName(DtoMetadata metadata) {
         if (supportsSchemas() && metadata.getSchema() != null) {
             return quoteIdentifier(metadata.getSchema()) + "." + quoteIdentifier(metadata.getTableName());
         }
         return quoteIdentifier(metadata.getTableName());
     }
 
-    default String generateInsert(EntityMetadata metadata) {
+    default String generateInsert(DtoMetadata metadata) {
         var nonIdFields = metadata.getNonIdFields();
         String columns = nonIdFields.stream()
                 .map(f -> quoteIdentifier(f.getColumnName()))
@@ -57,7 +58,7 @@ public interface Dialect {
                 getFullTableName(metadata), columns, placeholders);
     }
 
-    default String generateUpdate(EntityMetadata metadata) {
+    default String generateUpdate(DtoMetadata metadata) {
         var nonIdFields = metadata.getNonIdFields();
         String setClause = nonIdFields.stream()
                 .map(f -> quoteIdentifier(f.getColumnName()) + " = ?")
@@ -66,25 +67,25 @@ public interface Dialect {
                 getFullTableName(metadata), setClause, quoteIdentifier(metadata.getIdField().getColumnName()));
     }
 
-    default String generateDelete(EntityMetadata metadata) {
+    default String generateDelete(DtoMetadata metadata) {
         return String.format("DELETE FROM %s WHERE %s = ?",
                 getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
     }
 
-    default String generateSelectById(EntityMetadata metadata) {
+    default String generateSelectById(DtoMetadata metadata) {
         return String.format("SELECT * FROM %s WHERE %s = ?",
                 getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
     }
 
-    default String generateSelectAll(EntityMetadata metadata) {
+    default String generateSelectAll(DtoMetadata metadata) {
         return String.format("SELECT * FROM %s", getFullTableName(metadata));
     }
 
-    default String generateCount(EntityMetadata metadata) {
+    default String generateCount(DtoMetadata metadata) {
         return String.format("SELECT COUNT(*) FROM %s", getFullTableName(metadata));
     }
 
-    default String generateExists(EntityMetadata metadata) {
+    default String generateExists(DtoMetadata metadata) {
         return String.format("SELECT 1 FROM %s WHERE %s = ? LIMIT 1",
                 getFullTableName(metadata), quoteIdentifier(metadata.getIdField().getColumnName()));
     }
@@ -112,5 +113,77 @@ public interface Dialect {
 
     default String getLastInsertIdSql() {
         return null;
+    }
+
+    /**
+     * Generates SQL to list columns of an existing table.
+     */
+    String generateListColumnsSQL(String tableName, String schemaName);
+
+    /**
+     * Generates ALTER TABLE ADD COLUMN DDL for a single field.
+     */
+    String generateAddColumn(DtoMetadata metadata, FieldMetadata field);
+
+    /**
+     * Generates CREATE INDEX DDL. Default implementation uses IF NOT EXISTS syntax.
+     */
+    default String generateCreateIndex(DtoMetadata metadata, IndexDefinition index) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("CREATE ");
+        if (index.unique()) {
+            sql.append("UNIQUE ");
+        }
+        sql.append("INDEX IF NOT EXISTS ");
+        sql.append(quoteIdentifier(index.name()));
+        sql.append(" ON ");
+        sql.append(getFullTableName(metadata));
+        sql.append(" (");
+        for (int i = 0; i < index.columns().length; i++) {
+            if (i > 0) sql.append(", ");
+            sql.append(quoteIdentifier(index.columns()[i]));
+        }
+        sql.append(")");
+        if (supportsPartialIndexes() && !index.where().isEmpty()) {
+            sql.append(" WHERE ").append(index.where());
+        }
+        return sql.toString();
+    }
+
+    /**
+     * Generates CREATE TABLE for a ManyToMany junction table.
+     */
+    default String generateCreateJoinTable(String joinTable, String leftColumn, Class<?> leftIdType,
+                                           String rightColumn, Class<?> rightIdType) {
+        return String.format(
+            "CREATE TABLE IF NOT EXISTS %s (%s %s NOT NULL, %s %s NOT NULL, PRIMARY KEY (%s, %s))",
+            quoteIdentifier(joinTable),
+            quoteIdentifier(leftColumn), mapJavaTypeToSql(leftIdType, null),
+            quoteIdentifier(rightColumn), mapJavaTypeToSql(rightIdType, null),
+            quoteIdentifier(leftColumn), quoteIdentifier(rightColumn)
+        );
+    }
+
+    /**
+     * Generates ADD FOREIGN KEY CONSTRAINT DDL.
+     * Returns null if the dialect does not support declarative FK via ALTER TABLE (e.g. SQLite).
+     */
+    default String generateAddForeignKeyConstraint(String tableName, String fkColumn,
+                                                   String referencedTable, String referencedColumn) {
+        return String.format(
+            "ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
+            quoteIdentifier(tableName),
+            quoteIdentifier("fk_" + tableName + "_" + fkColumn),
+            quoteIdentifier(fkColumn),
+            quoteIdentifier(referencedTable),
+            quoteIdentifier(referencedColumn)
+        );
+    }
+
+    /**
+     * Whether the dialect supports partial indexes (WHERE clause on CREATE INDEX).
+     */
+    default boolean supportsPartialIndexes() {
+        return false;
     }
 }

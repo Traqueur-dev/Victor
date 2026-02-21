@@ -66,7 +66,7 @@ public final class Victor {
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
-                .autoScanEntities()
+                .autoScanDtos()
                 .build());
     }
 
@@ -75,7 +75,7 @@ public final class Victor {
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
-                .autoScanEntities(packages)
+                .autoScanDtos(packages)
                 .build());
     }
 

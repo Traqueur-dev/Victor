@@ -1,17 +1,21 @@
 package fr.traqueur.victor.database.migration;
 
 import fr.traqueur.victor.VictorConfiguration;
+import fr.traqueur.victor.annotations.VictorIndex;
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.Entity;
+import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
+import fr.traqueur.victor.entities.metadata.FieldMetadata;
+import fr.traqueur.victor.entities.metadata.RelationshipMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
-import fr.traqueur.victor.registries.EntityMetadataRegistry;
-import fr.traqueur.victor.scanner.EntityScanner;
+import fr.traqueur.victor.registries.DtoMetadataRegistry;
+import fr.traqueur.victor.scanner.DtoScanner;
 import fr.traqueur.victor.utils.VictorLogger;
 
-import java.util.Objects;
-import java.util.Set;
+import java.lang.reflect.RecordComponent;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public final class AutoMigration {
 
@@ -30,48 +34,75 @@ public final class AutoMigration {
             return;
         }
 
-        Set<Class<? extends Entity<?>>> entityClasses = configuration.entityClasses();
+        Set<Class<? extends Dto<?>>> dtoClasses = configuration.dtoClasses();
 
-        // Si pas d'entités configurées, essayer l'auto-scan
-        if (entityClasses.isEmpty()) {
-            VictorLogger.warn("No entity classes found. attempting auto-scan...");
-            entityClasses = EntityScanner.scanForEntities();
+        if (dtoClasses.isEmpty()) {
+            VictorLogger.warn("No DTO classes found. Attempting auto-scan...");
+            dtoClasses = DtoScanner.scanForDtos();
         }
 
-        // Get existing tables
         Set<String> existingTables = getExistingTables();
         VictorLogger.debug("Found existing tables: " + existingTables);
 
-        // Create tables for each entity
-        for (Class<?> entityClass : entityClasses) {
+        // Phase 1 — Create/update scalar tables
+        for (Class<?> dtoClass : dtoClasses) {
             try {
-                EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
-                createTableIfNotExists(metadata, existingTables);
+                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                migrateTable(metadata, existingTables);
             } catch (Exception e) {
-                VictorLogger.error("Failed to migrate entity {}: {}", entityClass.getSimpleName(), e.getMessage());
+                VictorLogger.error("Failed to migrate DTO {}: {}", dtoClass.getSimpleName(), e.getMessage());
+            }
+        }
+
+        // Re-fetch tables after phase 1 (new tables may have been created)
+        existingTables = getExistingTables();
+
+        // Phase 2 — FK columns for owning-side relationships (ManyToOne / OneToOne owning)
+        for (Class<?> dtoClass : dtoClasses) {
+            try {
+                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                migrateForeignKeyColumns(metadata);
+            } catch (Exception e) {
+                VictorLogger.error("Failed to migrate FK columns for {}: {}", dtoClass.getSimpleName(), e.getMessage());
+            }
+        }
+
+        // Phase 3 — Junction tables (ManyToMany)
+        Set<String> processedJoinTables = new HashSet<>();
+        for (Class<?> dtoClass : dtoClasses) {
+            try {
+                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                migrateJunctionTables(metadata, processedJoinTables);
+            } catch (Exception e) {
+                VictorLogger.error("Failed to migrate junction tables for {}: {}", dtoClass.getSimpleName(), e.getMessage());
+            }
+        }
+
+        // Phase 4 — Indexes
+        for (Class<?> dtoClass : dtoClasses) {
+            try {
+                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                processIndexes(metadata);
+            } catch (Exception e) {
+                VictorLogger.error("Failed to process indexes for {}: {}", dtoClass.getSimpleName(), e.getMessage());
             }
         }
     }
 
-    private void createTableIfNotExists(EntityMetadata metadata, Set<String> existingTables) {
+    // ========== Phase 1: Table migration ==========
+
+    private void migrateTable(DtoMetadata metadata, Set<String> existingTables) {
         String tableName = metadata.getTableName().toLowerCase();
 
         if (existingTables.contains(tableName)) {
-            if (configuration.showSql()) {
-                VictorLogger.debug("Skipping auto-scan for table {}", tableName);
-            }
-            return;
-        }
-
-        createTable(metadata);
-
-        if (configuration.showSql()) {
-            VictorLogger.debug("Auto-scan for table {}", tableName);
+            updateTableIfNeeded(metadata);
+        } else {
+            createTable(metadata);
+            VictorLogger.info("Created table '{}'", tableName);
         }
     }
 
-    private void createTable(EntityMetadata metadata) {
-        // Create schema first if it doesn't exist and schema is specified
+    private void createTable(DtoMetadata metadata) {
         if (metadata.getSchema() != null && dialect.supportsSchemas()) {
             String createSchemaSQL = dialect.generateCreateSchema(metadata.getSchema());
             if (createSchemaSQL != null) {
@@ -84,7 +115,6 @@ public final class AutoMigration {
             }
         }
 
-        // Generate CREATE TABLE SQL using the dialect
         String createTableSql = dialect.generateCreateTable(metadata);
 
         try {
@@ -92,6 +122,294 @@ public final class AutoMigration {
         } catch (Exception e) {
             throw new VictorException("Failed to create table " + metadata.getFullTableName(), e);
         }
+    }
+
+    // ========== ALTER TABLE — schema diff ==========
+
+    private void updateTableIfNeeded(DtoMetadata metadata) {
+        List<DatabaseColumn> existingColumns;
+        try {
+            existingColumns = queryExistingColumns(metadata);
+        } catch (Exception e) {
+            VictorLogger.error("Failed to query columns for table '{}': {}",
+                    metadata.getTableName(), e.getMessage());
+            return;
+        }
+
+        Set<String> existingColumnNames = existingColumns.stream()
+                .map(DatabaseColumn::columnName)
+                .collect(Collectors.toSet());
+
+        // Expected columns = scalar fields + FK columns from owning-side relations
+        List<FieldMetadata> expectedFields = metadata.getAllPersistableFields();
+        Set<String> expectedColumnNames = expectedFields.stream()
+                .map(f -> f.getColumnName().toLowerCase())
+                .collect(Collectors.toSet());
+
+        // Detect new columns
+        List<FieldMetadata> columnsToAdd = expectedFields.stream()
+                .filter(f -> !existingColumnNames.contains(f.getColumnName().toLowerCase()))
+                .filter(f -> !f.isId())
+                .toList();
+
+        for (FieldMetadata field : columnsToAdd) {
+            addColumn(metadata, field);
+        }
+
+        // Warn about removed columns
+        Set<String> removedColumns = existingColumnNames.stream()
+                .filter(col -> !expectedColumnNames.contains(col))
+                .collect(Collectors.toSet());
+
+        for (String removedCol : removedColumns) {
+            VictorLogger.warn(
+                    "Column '{}' exists in table '{}' but is not defined in the DTO. " +
+                    "Victor will NOT drop this column automatically to prevent data loss.",
+                    removedCol, metadata.getTableName()
+            );
+        }
+
+        // Warn about type changes
+        Map<String, DatabaseColumn> existingColumnMap = existingColumns.stream()
+                .collect(Collectors.toMap(DatabaseColumn::columnName, c -> c));
+
+        for (FieldMetadata field : expectedFields) {
+            String colName = field.getColumnName().toLowerCase();
+            DatabaseColumn dbCol = existingColumnMap.get(colName);
+            if (dbCol != null) {
+                String expectedType = field.hasCustomSqlType()
+                        ? field.getSqlType()
+                        : dialect.mapJavaTypeToSql(field.getJavaType(), field);
+                String normalizedExpected = normalizeTypeName(expectedType);
+                String normalizedActual = normalizeTypeName(dbCol.dataType());
+                if (!normalizedExpected.equals(normalizedActual)) {
+                    VictorLogger.warn(
+                            "Column '{}' in table '{}' has type '{}' but DTO expects '{}'. " +
+                            "Victor will NOT alter column types automatically.",
+                            colName, metadata.getTableName(), dbCol.dataType(), expectedType
+                    );
+                }
+            }
+        }
+    }
+
+    private void addColumn(DtoMetadata metadata, FieldMetadata field) {
+        boolean isSqlite = "sqlite".equalsIgnoreCase(dialect.getName());
+
+        if (isSqlite && !field.isNullable() && !field.hasDefaultValue()) {
+            VictorLogger.warn(
+                    "SQLite cannot add NOT NULL column '{}' to table '{}' without a default value. " +
+                    "The column will be added as nullable instead.",
+                    field.getColumnName(), metadata.getTableName()
+            );
+        }
+
+        if (isSqlite && field.isUnique()) {
+            VictorLogger.warn(
+                    "SQLite cannot add column '{}' with UNIQUE constraint via ALTER TABLE. " +
+                    "The UNIQUE constraint will be skipped. Consider creating a UNIQUE index instead.",
+                    field.getColumnName()
+            );
+        }
+
+        String sql = dialect.generateAddColumn(metadata, field);
+
+        try {
+            sqlExecutor.executeDDL(sql);
+            VictorLogger.info("Added column '{}' to table '{}'",
+                    field.getColumnName(), metadata.getTableName());
+        } catch (Exception e) {
+            VictorLogger.error("Failed to add column '{}' to table '{}': {}",
+                    field.getColumnName(), metadata.getTableName(), e.getMessage());
+        }
+    }
+
+    // ========== Phase 2: FK columns ==========
+
+    private void migrateForeignKeyColumns(DtoMetadata metadata) {
+        for (RelationshipMetadata rel : metadata.getOwningSideRelationships()) {
+            String fkColumn = rel.getForeignKeyColumn();
+
+            List<DatabaseColumn> existingColumns;
+            try {
+                existingColumns = queryExistingColumns(metadata);
+            } catch (Exception e) {
+                continue;
+            }
+
+            boolean fkExists = existingColumns.stream()
+                    .anyMatch(c -> c.columnName().equalsIgnoreCase(fkColumn));
+
+            if (!fkExists) {
+                DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+                FieldMetadata fkField = FieldMetadata.forForeignKey(
+                        fkColumn, targetMeta.getIdField().getJavaType(), rel.isNullable()
+                );
+                addColumn(metadata, fkField);
+            }
+
+            // Optionally add FK constraint (SQLiteDialect returns null)
+            DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+            String fkSql = dialect.generateAddForeignKeyConstraint(
+                    metadata.getTableName(), fkColumn,
+                    targetMeta.getTableName(), targetMeta.getIdField().getColumnName()
+            );
+            if (fkSql != null) {
+                try {
+                    sqlExecutor.executeDDL(fkSql);
+                    VictorLogger.debug("FK constraint added: {} -> {}", fkColumn, targetMeta.getTableName());
+                } catch (Exception e) {
+                    // FK constraint may already exist or not be supported — non-fatal
+                    VictorLogger.debug("FK constraint skipped for '{}': {}", fkColumn, e.getMessage());
+                }
+            }
+        }
+    }
+
+    // ========== Phase 3: Junction tables ==========
+
+    private void migrateJunctionTables(DtoMetadata metadata, Set<String> processedJoinTables) {
+        for (RelationshipMetadata rel : metadata.getRelationships()) {
+            if (rel.getType() != RelationshipMetadata.RelationType.MANY_TO_MANY) continue;
+
+            String joinTable = rel.getJoinTable();
+            if (!processedJoinTables.add(joinTable)) continue; // already created
+
+            DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+
+            String createSql = dialect.generateCreateJoinTable(
+                    joinTable,
+                    rel.getJoinColumn(), metadata.getIdField().getJavaType(),
+                    rel.getInverseJoinColumn(), targetMeta.getIdField().getJavaType()
+            );
+
+            try {
+                sqlExecutor.executeDDL(createSql);
+                VictorLogger.info("Created junction table '{}'", joinTable);
+            } catch (Exception e) {
+                VictorLogger.error("Failed to create junction table '{}': {}", joinTable, e.getMessage());
+            }
+        }
+    }
+
+    // ========== Phase 4: Index processing ==========
+
+    private void processIndexes(DtoMetadata metadata) {
+        Class<?> dtoClass = metadata.getDtoClass();
+
+        // Class-level @VictorIndex annotations
+        VictorIndex[] classIndexes = dtoClass.getAnnotationsByType(VictorIndex.class);
+        for (VictorIndex idx : classIndexes) {
+            if (idx.columns().length == 0) {
+                VictorLogger.warn("@VictorIndex on class {} has no columns defined, skipping.",
+                        dtoClass.getSimpleName());
+                continue;
+            }
+            createIndex(metadata, idx.name(), idx.columns(), idx.unique(), idx.where());
+        }
+
+        // Field/component-level @VictorIndex annotations
+        if (dtoClass.isRecord()) {
+            for (RecordComponent component : dtoClass.getRecordComponents()) {
+                VictorIndex[] fieldIndexes = component.getAnnotationsByType(VictorIndex.class);
+                for (VictorIndex idx : fieldIndexes) {
+                    // Resolve column name from FieldMetadata
+                    FieldMetadata fm = metadata.getFieldByName(component.getName());
+                    String columnName = fm != null ? fm.getColumnName() : component.getName();
+                    String[] columns = idx.columns().length > 0 ? idx.columns() : new String[]{columnName};
+                    createIndex(metadata, idx.name(), columns, idx.unique(), idx.where());
+                }
+            }
+        } else {
+            Class<?> current = dtoClass;
+            while (current != null && current != Object.class) {
+                for (java.lang.reflect.Field field : current.getDeclaredFields()) {
+                    VictorIndex[] fieldIndexes = field.getAnnotationsByType(VictorIndex.class);
+                    for (VictorIndex idx : fieldIndexes) {
+                        FieldMetadata fm = metadata.getFieldByName(field.getName());
+                        String columnName = fm != null ? fm.getColumnName() : field.getName();
+                        String[] columns = idx.columns().length > 0 ? idx.columns() : new String[]{columnName};
+                        createIndex(metadata, idx.name(), columns, idx.unique(), idx.where());
+                    }
+                }
+                current = current.getSuperclass();
+            }
+        }
+    }
+
+    private void createIndex(DtoMetadata metadata, String name, String[] columns,
+                             boolean unique, String where) {
+        String indexName = name.isEmpty()
+                ? generateIndexName(metadata.getTableName(), columns, unique)
+                : name;
+
+        String effectiveWhere = where;
+        if (!effectiveWhere.isEmpty() && !dialect.supportsPartialIndexes()) {
+            VictorLogger.warn("Dialect {} does not support partial indexes. " +
+                            "WHERE clause will be ignored for index '{}'.",
+                    dialect.getName(), indexName);
+            effectiveWhere = "";
+        }
+
+        IndexDefinition indexDef = new IndexDefinition(indexName, columns, unique, effectiveWhere);
+        String sql = dialect.generateCreateIndex(metadata, indexDef);
+
+        try {
+            sqlExecutor.executeDDL(sql);
+            VictorLogger.debug("Index '{}' ensured on table '{}'", indexName, metadata.getTableName());
+        } catch (Exception e) {
+            VictorLogger.debug("Index '{}' may already exist on table '{}': {}",
+                    indexName, metadata.getTableName(), e.getMessage());
+        }
+    }
+
+    // ========== Column introspection ==========
+
+    private List<DatabaseColumn> queryExistingColumns(DtoMetadata metadata) {
+        String sql = dialect.generateListColumnsSQL(metadata.getTableName(), metadata.getSchema());
+
+        if ("sqlite".equalsIgnoreCase(dialect.getName())) {
+            return sqlExecutor.executeQuery(sql, null, rs -> new DatabaseColumn(
+                    rs.getString("name").toLowerCase(),
+                    rs.getString("type"),
+                    rs.getInt("notnull") == 0,
+                    rs.getString("dflt_value")
+            ));
+        } else {
+            return sqlExecutor.executeQuery(sql, null, rs -> new DatabaseColumn(
+                    rs.getString("COLUMN_NAME").toLowerCase(),
+                    rs.getString("DATA_TYPE"),
+                    "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")),
+                    rs.getString("COLUMN_DEFAULT")
+            ));
+        }
+    }
+
+    // ========== Helpers ==========
+
+    private String generateIndexName(String tableName, String[] columns, boolean unique) {
+        String prefix = unique ? "uk_" : "idx_";
+        return prefix + tableName + "_" + String.join("_", columns);
+    }
+
+    private String normalizeTypeName(String typeName) {
+        if (typeName == null) return "";
+        String normalized = typeName.toUpperCase().trim();
+        int parenIndex = normalized.indexOf('(');
+        if (parenIndex > 0) {
+            normalized = normalized.substring(0, parenIndex);
+        }
+        return switch (normalized) {
+            case "INT", "INT4" -> "INTEGER";
+            case "INT8", "BIGSERIAL" -> "BIGINT";
+            case "SERIAL" -> "INTEGER";
+            case "BOOL" -> "BOOLEAN";
+            case "FLOAT4" -> "REAL";
+            case "FLOAT8" -> "DOUBLE PRECISION";
+            case "CHARACTER VARYING" -> "VARCHAR";
+            case "TINYINT" -> "BOOLEAN";
+            default -> normalized;
+        };
     }
 
     private Set<String> getExistingTables() {
@@ -109,23 +427,24 @@ public final class AutoMigration {
 
         Set<String> tables = sqlExecutor.executeQueryForStringSet(sql);
 
-        VictorLogger.debug("Found {} existing tables for schema {}", tables.size(), (schemaName != null ? schemaName : "default"));
+        VictorLogger.debug("Found {} existing tables for schema {}", tables.size(),
+                (schemaName != null ? schemaName : "default"));
 
         return tables;
     }
 
     private String determineSchemaForTableListing() {
-        var schemas = configuration.entityClasses().stream()
+        var schemas = configuration.dtoClasses().stream()
                 .map(clazz -> {
                     try {
-                        EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(clazz);
+                        DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(clazz);
                         return metadata.getSchema();
                     } catch (Exception e) {
                         return null;
                     }
                 })
                 .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         if (schemas.size() == 1) {
             return schemas.iterator().next();

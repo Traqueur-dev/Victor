@@ -1,7 +1,7 @@
 package fr.traqueur.victor.database.query;
 
 import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.utils.StringUtils;
@@ -15,17 +15,17 @@ import java.util.stream.Collectors;
  * Génère le SQL pour les queries dynamiques basées sur les noms de méthodes.
  */
 public final class DynamicQuerySqlGenerator {
-    
-    private final EntityMetadata entityMetadata;
+
+    private final DtoMetadata dtoMetadata;
     private final Dialect dialect;
     private final boolean showSql;
-    
-    public DynamicQuerySqlGenerator(EntityMetadata entityMetadata, Dialect dialect, boolean showSql) {
-        this.entityMetadata = entityMetadata;
+
+    public DynamicQuerySqlGenerator(DtoMetadata dtoMetadata, Dialect dialect, boolean showSql) {
+        this.dtoMetadata = dtoMetadata;
         this.dialect = dialect;
         this.showSql = showSql;
     }
-    
+
     /**
      * Génère le SQL complet pour une query parsée.
      */
@@ -44,46 +44,46 @@ public final class DynamicQuerySqlGenerator {
             sql.append(" ORDER BY ");
             sql.append(buildOrderByClause(parsedQuery.orderBy()));
         }
-        
+
         String generatedSql = sql.toString();
 
         if (showSql) {
             VictorLogger.debug("Generated sql: " + generatedSql);
         }
-        
+
         return generatedSql;
     }
-    
+
     /**
      * Construit la clause WHERE complète.
      */
     private String buildWhereClause(List<MethodNameParser.WhereCondition> conditions) {
         List<String> parts = new ArrayList<>();
-        
+
         for (MethodNameParser.WhereCondition condition : conditions) {
             String fieldName = StringUtils.camelToSnakeCase(condition.fieldName());
             String columnName = findColumnName(fieldName);
             String sqlCondition = buildCondition(columnName, condition.operator());
-            
+
             parts.add(sqlCondition);
         }
 
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < parts.size(); i++) {
             result.append(parts.get(i));
-            
+
             if (i < parts.size() - 1) {
                 String connector = conditions.get(i).connector();
                 result.append(" ").append(connector).append(" ");
             }
         }
-        
+
         return result.toString();
     }
 
     private String buildCondition(String columnName, String operator) {
         String quotedColumn = dialect.quoteIdentifier(columnName);
-        
+
         return switch (operator) {
             case "Equal" -> quotedColumn + " = ?";
             case "NotEqual" -> quotedColumn + " != ?";
@@ -94,7 +94,7 @@ public final class DynamicQuerySqlGenerator {
 
             case "Like" -> buildLikeCondition(quotedColumn, false);
             case "NotLike" -> buildLikeCondition(quotedColumn, true);
-            
+
             case "IsNull" -> quotedColumn + " IS NULL";
             case "IsNotNull" -> quotedColumn + " IS NOT NULL";
             case "In" -> quotedColumn + " IN (?)";
@@ -125,21 +125,20 @@ public final class DynamicQuerySqlGenerator {
     }
 
     private String findColumnName(String fieldName) {
-        for (FieldMetadata field : entityMetadata.getFields()) {
-            if (field.getField().getName().equalsIgnoreCase(fieldName)) {
+        for (FieldMetadata field : dtoMetadata.getScalarFields()) {
+            if (field.getFieldName().equalsIgnoreCase(fieldName)) {
                 return field.getColumnName();
             }
         }
-
         return fieldName;
     }
 
     private String getFullTableName() {
-        if (entityMetadata.getSchema() != null) {
-            return dialect.quoteIdentifier(entityMetadata.getSchema()) + "." + 
-                   dialect.quoteIdentifier(entityMetadata.getTableName());
+        if (dtoMetadata.getSchema() != null) {
+            return dialect.quoteIdentifier(dtoMetadata.getSchema()) + "." +
+                   dialect.quoteIdentifier(dtoMetadata.getTableName());
         } else {
-            return dialect.quoteIdentifier(entityMetadata.getTableName());
+            return dialect.quoteIdentifier(dtoMetadata.getTableName());
         }
     }
 }

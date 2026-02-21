@@ -7,7 +7,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE, ElementType.FIELD})
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.RECORD_COMPONENT})
 @Repeatable(VictorIndexes.class)
 public @interface VictorIndex {
 
@@ -21,7 +21,7 @@ public @interface VictorIndex {
 }
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE, ElementType.FIELD})
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.RECORD_COMPONENT})
 @interface VictorIndexes {
     VictorIndex[] value();
 }

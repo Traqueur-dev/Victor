@@ -1,7 +1,7 @@
 package fr.traqueur.victor.entities.dialect.postregresql;
 
 import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
 import fr.traqueur.victor.entities.metadata.FieldMetadata;
 
 import java.math.BigDecimal;
@@ -13,6 +13,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 public class PostegreSQLDialect implements Dialect {
+
     @Override
     public String getName() {
         return "postgresql";
@@ -64,21 +65,15 @@ public class PostegreSQLDialect implements Dialect {
     @Override
     public Properties getDefaultConnectionProperties() {
         Properties props = new Properties();
-
         props.setProperty("charSet", "UTF8");
-
         props.setProperty("prepareThreshold", "5");
         props.setProperty("preparedStatementCacheQueries", "256");
         props.setProperty("preparedStatementCacheSizeMiB", "5");
-
         props.setProperty("connectTimeout", "10");
         props.setProperty("socketTimeout", "30");
-
         props.setProperty("ApplicationName", "Victor-ORM");
-
         props.setProperty("ssl", "false");
         props.setProperty("sslmode", "prefer");
-
         return props;
     }
 
@@ -88,7 +83,7 @@ public class PostegreSQLDialect implements Dialect {
     }
 
     @Override
-    public String generateCreateTable(EntityMetadata metadata) {
+    public String generateCreateTable(DtoMetadata metadata) {
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE TABLE ");
 
@@ -98,7 +93,6 @@ public class PostegreSQLDialect implements Dialect {
 
         sql.append(quoteIdentifier(metadata.getTableName())).append(" (\n");
 
-        // Colonnes
         var columnDefinitions = metadata.getFields().stream()
                 .map(this::generateColumnDefinition)
                 .collect(Collectors.toList());
@@ -148,13 +142,10 @@ public class PostegreSQLDialect implements Dialect {
             def.append(" NOT NULL");
         }
 
-        // Default value
         if (field.hasDefaultValue()) {
             def.append(" DEFAULT ");
             if (field.getJavaType() == String.class) {
                 def.append("'").append(escapeString(field.getDefaultValue())).append("'");
-            } else if (field.getJavaType() == Boolean.class || field.getJavaType() == boolean.class) {
-                def.append(field.getDefaultValue());
             } else {
                 def.append(field.getDefaultValue());
             }
@@ -168,8 +159,7 @@ public class PostegreSQLDialect implements Dialect {
     }
 
     @Override
-    public String generateUpsert(EntityMetadata metadata) {
-
+    public String generateUpsert(DtoMetadata metadata) {
         var allFields = metadata.getFields();
         var nonIdFields = metadata.getNonIdFields();
 
@@ -196,7 +186,7 @@ public class PostegreSQLDialect implements Dialect {
     }
 
     @Override
-    public String generateExists(EntityMetadata metadata) {
+    public String generateExists(DtoMetadata metadata) {
         return String.format("SELECT CASE WHEN EXISTS(SELECT 1 FROM %s WHERE %s = ?) THEN 1 ELSE 0 END",
                 getFullTableName(metadata),
                 quoteIdentifier(metadata.getIdField().getColumnName()));
@@ -205,7 +195,7 @@ public class PostegreSQLDialect implements Dialect {
     @Override
     public String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata) {
         if (javaType == String.class) {
-            int length = fieldMetadata.getLength();
+            int length = fieldMetadata != null ? fieldMetadata.getLength() : 255;
             if (length <= 255) {
                 return "VARCHAR(" + length + ")";
             } else {
@@ -236,7 +226,7 @@ public class PostegreSQLDialect implements Dialect {
         } else if (javaType == java.util.UUID.class) {
             return "UUID";
         } else {
-            return "TEXT";  // Fallback
+            return "TEXT";
         }
     }
 
@@ -284,5 +274,47 @@ public class PostegreSQLDialect implements Dialect {
         } else {
             return "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
         }
+    }
+
+    @Override
+    public String generateListColumnsSQL(String tableName, String schemaName) {
+        String schema = (schemaName != null) ? schemaName.toLowerCase() : "public";
+        return String.format(
+                "SELECT column_name AS COLUMN_NAME, data_type AS DATA_TYPE, " +
+                "is_nullable AS IS_NULLABLE, column_default AS COLUMN_DEFAULT " +
+                "FROM information_schema.columns " +
+                "WHERE table_name = '%s' AND table_schema = '%s'",
+                tableName.toLowerCase(), schema
+        );
+    }
+
+    @Override
+    public String generateAddColumn(DtoMetadata metadata, FieldMetadata field) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("ALTER TABLE ").append(getFullTableName(metadata));
+        sql.append(" ADD COLUMN ");
+        sql.append(quoteIdentifier(field.getColumnName())).append(" ");
+        if (field.hasCustomSqlType()) {
+            sql.append(field.getSqlType());
+        } else {
+            sql.append(mapJavaTypeToSql(field.getJavaType(), field));
+        }
+        if (!field.isNullable()) {
+            sql.append(" NOT NULL");
+        }
+        if (field.hasDefaultValue()) {
+            sql.append(" DEFAULT ");
+            if (field.getJavaType() == String.class) {
+                sql.append("'").append(escapeString(field.getDefaultValue())).append("'");
+            } else {
+                sql.append(field.getDefaultValue());
+            }
+        }
+        return sql.toString();
+    }
+
+    @Override
+    public boolean supportsPartialIndexes() {
+        return true;
     }
 }

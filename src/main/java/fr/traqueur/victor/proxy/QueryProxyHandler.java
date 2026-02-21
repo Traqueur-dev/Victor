@@ -1,11 +1,11 @@
 package fr.traqueur.victor.proxy;
 
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.dialect.Dialect; // ✅ CHANGEMENT: Dialect au lieu de SqlGenerator
+import fr.traqueur.victor.entities.dialect.Dialect;
 import fr.traqueur.victor.entities.Dto;
 import fr.traqueur.victor.entities.Entity;
 import fr.traqueur.victor.entities.Query;
-import fr.traqueur.victor.entities.metadata.EntityMetadata;
+import fr.traqueur.victor.entities.metadata.DtoMetadata;
 import fr.traqueur.victor.database.DtoMapper;
 import fr.traqueur.victor.exceptions.VictorException;
 
@@ -19,16 +19,16 @@ import java.util.Optional;
 public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> implements InvocationHandler {
 
     private final Class<DTO> dtoClass;
-    private final EntityMetadata entityMetadata;
+    private final DtoMetadata dtoMetadata;
     private final SqlExecutor sqlExecutor;
     private final QueryBuilder queryBuilder;
 
-    public QueryProxyHandler(Class<DTO> dtoClass, EntityMetadata entityMetadata,
+    public QueryProxyHandler(Class<DTO> dtoClass, DtoMetadata dtoMetadata,
                              SqlExecutor sqlExecutor, Dialect dialect) {
         this.dtoClass = dtoClass;
-        this.entityMetadata = entityMetadata;
+        this.dtoMetadata = dtoMetadata;
         this.sqlExecutor = sqlExecutor;
-        this.queryBuilder = new QueryBuilder(entityMetadata, dialect);
+        this.queryBuilder = new QueryBuilder(dtoMetadata, dialect);
     }
 
     @Override
@@ -113,7 +113,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     private List<DTO> findAll() {
         String sql = queryBuilder.build();
         Object[] params = queryBuilder.getParameters();
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, params, mapper);
     }
 
@@ -121,7 +121,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         String sql = queryBuilder.copy().limit(1).build();
         Object[] params = queryBuilder.getParameters();
 
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, entityMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
         DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
         return Optional.ofNullable(result);
     }
@@ -134,7 +134,6 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     private long count() {
         String sql = queryBuilder.buildCount();
         Object[] params = queryBuilder.getParameters();
-
         return sqlExecutor.executeCount(sql, params);
     }
 
@@ -152,8 +151,8 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     }
 
     private static class QueryBuilder {
-        private final EntityMetadata entityMetadata;
-        private final Dialect dialect; // ✅ AJOUT: Support Dialect
+        private final DtoMetadata dtoMetadata;
+        private final Dialect dialect;
         private final List<String> selectColumns = new ArrayList<>();
         private final List<String> whereConditions = new ArrayList<>();
         private final List<Object> parameters = new ArrayList<>();
@@ -164,8 +163,8 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         private Integer limitValue;
         private Integer offsetValue;
 
-        public QueryBuilder(EntityMetadata entityMetadata, Dialect dialect) {
-            this.entityMetadata = entityMetadata;
+        public QueryBuilder(DtoMetadata dtoMetadata, Dialect dialect) {
+            this.dtoMetadata = dtoMetadata;
             this.dialect = dialect;
         }
 
@@ -243,7 +242,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         public QueryBuilder copy() {
-            QueryBuilder copy = new QueryBuilder(this.entityMetadata, this.dialect);
+            QueryBuilder copy = new QueryBuilder(this.dtoMetadata, this.dialect);
             copy.selectColumns.addAll(this.selectColumns);
             copy.whereConditions.addAll(this.whereConditions);
             copy.parameters.addAll(this.parameters);
@@ -300,7 +299,6 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
 
         public String buildCount() {
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ");
-
             sql.append(getQuotedFullTableName());
 
             if (!joins.isEmpty()) {
@@ -315,9 +313,9 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         private String getQuotedFullTableName() {
-            String tableName = dialect.quoteIdentifier(entityMetadata.getTableName());
-            if (entityMetadata.getSchema() != null) {
-                return dialect.quoteIdentifier(entityMetadata.getSchema()) + "." + tableName;
+            String tableName = dialect.quoteIdentifier(dtoMetadata.getTableName());
+            if (dtoMetadata.getSchema() != null) {
+                return dialect.quoteIdentifier(dtoMetadata.getSchema()) + "." + tableName;
             }
             return tableName;
         }
