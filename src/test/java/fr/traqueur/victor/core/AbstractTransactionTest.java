@@ -3,6 +3,7 @@ package fr.traqueur.victor.core;
 import fr.traqueur.victor.entities.transaction.Transaction;
 import fr.traqueur.victor.exceptions.VictorTransactionException;
 import fr.traqueur.victor.dto.UserDto;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -10,6 +11,13 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 public abstract class AbstractTransactionTest extends AbstractVictorTest {
+
+    @BeforeEach
+    void cleanUpBeforeTransactionTest() {
+        userRepository.deleteAll();
+        authorRepo.deleteAll();
+        bookRepo.deleteAll();
+    }
 
     @Test
     void testTransactionCommit() {

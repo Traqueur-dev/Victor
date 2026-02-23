@@ -2,12 +2,11 @@ package fr.traqueur.victor.dialect.mysql;
 
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
-import fr.traqueur.victor.core.*;
+import fr.traqueur.victor.core.AbstractTestRunner;
 import fr.traqueur.victor.dto.UserDto;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -18,7 +17,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
-class MySQLTest {
+class MySQLTest extends AbstractTestRunner {
 
     // ====================================================
     // TESTCONTAINER MYSQL
@@ -35,57 +34,12 @@ class MySQLTest {
     // CONFIGURATION UNIQUE
     // ====================================================
 
+    @Override
     protected VictorBuilder configureVictor() {
         return Victor.configure()
                 .url(mysql.getJdbcUrl())
                 .credentials(mysql.getUsername(), mysql.getPassword())
                 .autoDetectDialect();
-    }
-
-    // ====================================================
-    // SUITES COMMUNES
-    // ====================================================
-
-    @Nested
-    class Crud extends AbstractCrudTest {
-        @Override protected VictorBuilder configureVictor() {
-            return MySQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class DynamicQuery extends AbstractDynamicQueryTest {
-        @Override protected VictorBuilder configureVictor() {
-            return MySQLTest.this.configureVictor();
-        }
-    }
-
-    /*@Nested
-    class Transactions extends AbstractTransactionTest {
-        @Override protected VictorBuilder configureVictor() {
-            return H2Test.this.configureVictor();
-        }
-    }*/
-
-    @Nested
-    class Relationships extends AbstractRelationshipTest {
-        @Override protected VictorBuilder configureVictor() {
-            return MySQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class Migration extends AbstractMigrationTest {
-        @Override protected VictorBuilder configureVictor() {
-            return MySQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class ServiceLayer extends AbstractUserServiceTest {
-        @Override protected VictorBuilder configureVictor() {
-            return MySQLTest.this.configureVictor();
-        }
     }
 
     // ====================================================

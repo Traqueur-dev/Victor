@@ -78,9 +78,10 @@ public final class TransactionImpl implements Transaction {
         try {
             if (!connection.isClosed()) {
                 connection.setAutoCommit(true);
+                connection.close();
             }
         } catch (SQLException e) {
-            VictorLogger.warn("Failed to restore auto-commit: {}", e.getMessage());
+            VictorLogger.warn("Failed to close transaction connection: {}", e.getMessage());
         }
 
         TransactionContext.clearCurrentTransaction();

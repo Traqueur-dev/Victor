@@ -2,12 +2,11 @@ package fr.traqueur.victor.dialect.postgresql;
 
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
-import fr.traqueur.victor.core.*;
+import fr.traqueur.victor.core.AbstractTestRunner;
 import fr.traqueur.victor.dto.UserDto;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -18,7 +17,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
-class PostgreSQLTest {
+class PostgreSQLTest extends AbstractTestRunner {
 
     // ====================================================
     // TESTCONTAINER POSTGRESQL
@@ -35,57 +34,12 @@ class PostgreSQLTest {
     // CONFIGURATION UNIQUE
     // ====================================================
 
+    @Override
     protected VictorBuilder configureVictor() {
         return Victor.configure()
                 .url(postgres.getJdbcUrl())
                 .credentials(postgres.getUsername(), postgres.getPassword())
                 .autoDetectDialect();
-    }
-
-    // ====================================================
-    // SUITES COMMUNES
-    // ====================================================
-
-    @Nested
-    class Crud extends AbstractCrudTest {
-        @Override protected VictorBuilder configureVictor() {
-            return PostgreSQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class DynamicQuery extends AbstractDynamicQueryTest {
-        @Override protected VictorBuilder configureVictor() {
-            return PostgreSQLTest.this.configureVictor();
-        }
-    }
-
-    /*@Nested
-    class Transactions extends AbstractTransactionTest {
-        @Override protected VictorBuilder configureVictor() {
-            return H2Test.this.configureVictor();
-        }
-    }*/
-
-    @Nested
-    class Relationships extends AbstractRelationshipTest {
-        @Override protected VictorBuilder configureVictor() {
-            return PostgreSQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class Migration extends AbstractMigrationTest {
-        @Override protected VictorBuilder configureVictor() {
-            return PostgreSQLTest.this.configureVictor();
-        }
-    }
-
-    @Nested
-    class ServiceLayer extends AbstractUserServiceTest {
-        @Override protected VictorBuilder configureVictor() {
-            return PostgreSQLTest.this.configureVictor();
-        }
     }
 
     // ====================================================
