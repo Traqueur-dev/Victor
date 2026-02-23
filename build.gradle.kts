@@ -69,13 +69,7 @@ dependencies {
     testImplementation("org.testcontainers:postgresql:1.19.0")
 }
 
-afterEvaluate {
-    project(":dialects").subprojects.forEach { dialectProject ->
-        dependencies {
-            testImplementation(dialectProject)
-        }
-    }
-}
+
 
 tasks.register("generateVersionProperties") {
     doLast {
