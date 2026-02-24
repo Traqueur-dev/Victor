@@ -6,9 +6,6 @@ import fr.traqueur.victor.dto.CourseDto;
 import fr.traqueur.victor.dto.StudentDto;
 import org.junit.jupiter.api.Test;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,28 +40,15 @@ public abstract class AbstractRelationshipTest extends AbstractVictorTest {
     }
 
     @Test
-    void testManyToMany() throws Exception {
+    void testManyToMany() {
         CourseDto course1 = courseRepo.save(new CourseDto(null, "Mathematics"));
         CourseDto course2 = courseRepo.save(new CourseDto(null, "Physics"));
 
-        StudentDto student = studentRepo.save(new StudentDto(null, "Alice", List.of()));
-
-        String url = victor.getConfiguration().connectionUrl();
-        try (Connection conn = DriverManager.getConnection(url);
-             PreparedStatement stmt = conn.prepareStatement(
-                     "INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)")) {
-            stmt.setLong(1, student.id());
-            stmt.setLong(2, course1.id());
-            stmt.executeUpdate();
-
-            stmt.setLong(1, student.id());
-            stmt.setLong(2, course2.id());
-            stmt.executeUpdate();
-        }
+        StudentDto student = studentRepo.save(
+                new StudentDto(null, "Alice", List.of(course1, course2)));
 
         StudentDto loaded = studentRepo.findById(student.id()).orElseThrow();
 
-        assertNotNull(loaded.courses());
         assertEquals(2, loaded.courses().size());
         assertTrue(loaded.courses().stream().anyMatch(c -> c.id().equals(course1.id())));
         assertTrue(loaded.courses().stream().anyMatch(c -> c.id().equals(course2.id())));
