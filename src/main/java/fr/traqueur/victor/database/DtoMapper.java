@@ -155,7 +155,18 @@ public final class DtoMapper {
                             + " WHERE " + dialect.quoteIdentifier(fkColumn) + " = ?";
                     yield sqlExecutor.executeQuery(sql, new Object[]{currentId}, mapper);
                 }
-                case MANY_TO_MANY -> List.of();
+                case MANY_TO_MANY -> {
+                    if (currentId == null) yield List.of();
+                    String joinTable = dialect.quoteIdentifier(rel.getJoinTable());
+                    String targetTable = dialect.getFullTableName(targetMeta);
+                    String inverseJoinCol = dialect.quoteIdentifier(rel.getInverseJoinColumn());
+                    String targetIdCol = dialect.quoteIdentifier(targetMeta.getIdField().getColumnName());
+                    String joinCol = dialect.quoteIdentifier(rel.getJoinColumn());
+                    String sql = "SELECT t.* FROM " + joinTable + " jt"
+                            + " JOIN " + targetTable + " t ON jt." + inverseJoinCol + " = t." + targetIdCol
+                            + " WHERE jt." + joinCol + " = ?";
+                    yield sqlExecutor.executeQuery(sql, new Object[]{currentId}, mapper);
+                }
                 case ONE_TO_ONE -> {
                     if (rel.ownsForeignKey()) {
                         Object fkValue = readFkFromRs(currentRs, rel.getForeignKeyColumn());
