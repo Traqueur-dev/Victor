@@ -24,6 +24,7 @@ allprojects {
     if (name != "bom") {
         apply {
             plugin("java-library")
+            plugin("jacoco")
         }
 
         dependencies {
@@ -59,6 +60,17 @@ allprojects {
                 "--add-opens", "java.base/java.lang=ALL-UNNAMED",
                 "--add-opens", "java.base/java.util=ALL-UNNAMED"
             )
+
+            finalizedBy("jacocoTestReport")
+        }
+
+        tasks.named("jacocoTestReport") {
+            (this as org.gradle.testing.jacoco.tasks.JacocoReport).apply {
+                reports {
+                    xml.required.set(true)
+                    html.required.set(true)
+                }
+            }
         }
     }
 }

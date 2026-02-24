@@ -53,4 +53,31 @@ public abstract class AbstractCrudTest extends AbstractVictorTest {
 
         assertFalse(userRepository.existsById(id));
     }
+
+    @Test
+    void testFindByIdNotFound() {
+        // Un ID très grand qui n'existe probablement pas
+        Optional<UserDto> result = userRepository.findById(Long.MAX_VALUE);
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testExistsByIdReturnsFalseForUnknownId() {
+        assertFalse(userRepository.existsById(Long.MAX_VALUE - 1));
+    }
+
+    @Test
+    void testCountIncrementsOnSave() {
+        long before = userRepository.count();
+        userRepository.save(createUser("count_" + System.nanoTime()));
+        assertEquals(before + 1, userRepository.count());
+    }
+
+    @Test
+    void testFindAll() {
+        userRepository.save(createUser("all_a_" + System.nanoTime()));
+        userRepository.save(createUser("all_b_" + System.nanoTime()));
+
+        assertFalse(userRepository.findAll().isEmpty());
+    }
 }

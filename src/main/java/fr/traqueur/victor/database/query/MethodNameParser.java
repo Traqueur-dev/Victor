@@ -20,12 +20,12 @@ public class MethodNameParser {
             "NotEqual",
             "GreaterThan",
             "LessThan",
-            "Like",
             "NotLike",
+            "Like",
             "IsNull",
             "IsNotNull",
-            "In",
-            "NotIn"
+            "NotIn",
+            "In"
     };
 
     private MethodNameParser() {}
