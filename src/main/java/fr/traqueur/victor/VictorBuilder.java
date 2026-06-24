@@ -1,10 +1,10 @@
 package fr.traqueur.victor;
 
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.dialect.Dialect;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.dialect.Dialect;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
 import fr.traqueur.victor.registries.DialectRegistry;
-import fr.traqueur.victor.scanner.DtoScanner;
+import fr.traqueur.victor.scanner.EntityScanner;
 import fr.traqueur.victor.security.SecureCredentials;
 
 import java.util.*;
@@ -22,7 +22,7 @@ public final class VictorBuilder {
     private boolean autoMigrate = false;
     private boolean showSql = false;
     private final Properties properties = new Properties();
-    private final Set<Class<? extends Dto<?>>> dtoClasses = new HashSet<>();
+    private final Set<Class<? extends Entity<?>>> entityClasses = new HashSet<>();
 
     public VictorBuilder sqlite() {
         this.dialect = DialectRegistry.getInstance().getByName("sqlite");
@@ -136,31 +136,31 @@ public final class VictorBuilder {
     }
 
     @SafeVarargs
-    public final VictorBuilder dtos(Class<? extends Dto<?>>... dtoClasses) {
-        this.dtoClasses.addAll(Arrays.asList(dtoClasses));
+    public final VictorBuilder entities(Class<? extends Entity<?>>... entityClasses) {
+        this.entityClasses.addAll(Arrays.asList(entityClasses));
         return this;
     }
 
-    public VictorBuilder autoScanDtos() {
-        this.dtoClasses.addAll(DtoScanner.scanForDtos());
+    public VictorBuilder autoScanEntities() {
+        this.entityClasses.addAll(EntityScanner.scanForEntities());
         return this;
     }
 
-    public VictorBuilder autoScanDtos(ClassLoader classLoader) {
-        this.dtoClasses.addAll(DtoScanner.scanForDtos(classLoader));
+    public VictorBuilder autoScanEntities(ClassLoader classLoader) {
+        this.entityClasses.addAll(EntityScanner.scanForEntities(classLoader));
         return this;
     }
 
-    public VictorBuilder autoScanDtos(String... packages) {
+    public VictorBuilder autoScanEntities(String... packages) {
         for (String pkg : packages) {
-            this.dtoClasses.addAll(DtoScanner.scanForDtos(pkg));
+            this.entityClasses.addAll(EntityScanner.scanForEntities(pkg));
         }
         return this;
     }
 
-    public VictorBuilder autoScanDtos(ClassLoader classLoader, String... packages) {
+    public VictorBuilder autoScanEntities(ClassLoader classLoader, String... packages) {
         for (String pkg : packages) {
-            this.dtoClasses.addAll(DtoScanner.scanForDtos(pkg, classLoader));
+            this.entityClasses.addAll(EntityScanner.scanForEntities(pkg, classLoader));
         }
         return this;
     }
@@ -217,7 +217,7 @@ public final class VictorBuilder {
                 properties,
                 showSql,
                 autoMigrate,
-                dtoClasses
+                entityClasses
         );
     }
 

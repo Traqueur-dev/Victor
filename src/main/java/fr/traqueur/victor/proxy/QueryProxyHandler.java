@@ -1,12 +1,12 @@
 package fr.traqueur.victor.proxy;
 
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.Entity;
-import fr.traqueur.victor.entities.Query;
-import fr.traqueur.victor.entities.metadata.DtoMetadata;
-import fr.traqueur.victor.database.DtoMapper;
+import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.Model;
+import fr.traqueur.victor.entity.Query;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.database.EntityMapper;
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.lang.reflect.InvocationHandler;
@@ -16,19 +16,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID> implements InvocationHandler {
+public class QueryProxyHandler<E extends Entity<MODEL>, MODEL extends Model<ID>, ID> implements InvocationHandler {
 
-    private final Class<DTO> dtoClass;
-    private final DtoMetadata dtoMetadata;
+    private final Class<E> entityClass;
+    private final EntityMetadata entityMetadata;
     private final SqlExecutor sqlExecutor;
     private final QueryBuilder queryBuilder;
 
-    public QueryProxyHandler(Class<DTO> dtoClass, DtoMetadata dtoMetadata,
+    public QueryProxyHandler(Class<E> entityClass, EntityMetadata entityMetadata,
                              SqlExecutor sqlExecutor, Dialect dialect) {
-        this.dtoClass = dtoClass;
-        this.dtoMetadata = dtoMetadata;
+        this.entityClass = entityClass;
+        this.entityMetadata = entityMetadata;
         this.sqlExecutor = sqlExecutor;
-        this.queryBuilder = new QueryBuilder(dtoMetadata, dialect);
+        this.queryBuilder = new QueryBuilder(entityMetadata, dialect);
     }
 
     @Override
@@ -110,23 +110,23 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         return result;
     }
 
-    private List<DTO> findAll() {
+    private List<E> findAll() {
         String sql = queryBuilder.build();
         Object[] params = queryBuilder.getParameters();
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, params, mapper);
     }
 
-    private Optional<DTO> findOne() {
+    private Optional<E> findOne() {
         String sql = queryBuilder.copy().limit(1).build();
         Object[] params = queryBuilder.getParameters();
 
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
-        DTO result = sqlExecutor.executeQuerySingle(sql, params, mapper);
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
+        E result = sqlExecutor.executeQuerySingle(sql, params, mapper);
         return Optional.ofNullable(result);
     }
 
-    private DTO findFirst() {
+    private E findFirst() {
         return findOne().orElseThrow(() ->
                 new VictorException("No entity found"));
     }
@@ -142,8 +142,8 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     }
 
     @SuppressWarnings("unchecked")
-    public Query<DTO> createProxy() {
-        return (Query<DTO>) Proxy.newProxyInstance(
+    public Query<E> createProxy() {
+        return (Query<E>) Proxy.newProxyInstance(
                 Query.class.getClassLoader(),
                 new Class[]{Query.class},
                 this
@@ -151,7 +151,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
     }
 
     private static class QueryBuilder {
-        private final DtoMetadata dtoMetadata;
+        private final EntityMetadata entityMetadata;
         private final Dialect dialect;
         private final List<String> selectColumns = new ArrayList<>();
         private final List<String> whereConditions = new ArrayList<>();
@@ -163,8 +163,8 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         private Integer limitValue;
         private Integer offsetValue;
 
-        public QueryBuilder(DtoMetadata dtoMetadata, Dialect dialect) {
-            this.dtoMetadata = dtoMetadata;
+        public QueryBuilder(EntityMetadata entityMetadata, Dialect dialect) {
+            this.entityMetadata = entityMetadata;
             this.dialect = dialect;
         }
 
@@ -242,7 +242,7 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         public QueryBuilder copy() {
-            QueryBuilder copy = new QueryBuilder(this.dtoMetadata, this.dialect);
+            QueryBuilder copy = new QueryBuilder(this.entityMetadata, this.dialect);
             copy.selectColumns.addAll(this.selectColumns);
             copy.whereConditions.addAll(this.whereConditions);
             copy.parameters.addAll(this.parameters);
@@ -313,9 +313,9 @@ public class QueryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>,
         }
 
         private String getQuotedFullTableName() {
-            String tableName = dialect.quoteIdentifier(dtoMetadata.getTableName());
-            if (dtoMetadata.getSchema() != null) {
-                return dialect.quoteIdentifier(dtoMetadata.getSchema()) + "." + tableName;
+            String tableName = dialect.quoteIdentifier(entityMetadata.getTableName());
+            if (entityMetadata.getSchema() != null) {
+                return dialect.quoteIdentifier(entityMetadata.getSchema()) + "." + tableName;
             }
             return tableName;
         }

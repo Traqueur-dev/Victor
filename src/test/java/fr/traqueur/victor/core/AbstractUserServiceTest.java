@@ -1,8 +1,8 @@
 package fr.traqueur.victor.core;
 
 import fr.traqueur.victor.*;
-import fr.traqueur.victor.dto.UserDto;
-import fr.traqueur.victor.entities.User;
+import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.model.User;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.service.UserService;
 import org.junit.jupiter.api.AfterEach;
@@ -22,7 +22,7 @@ public abstract class AbstractUserServiceTest {
         victor = configureVictor()
                 .autoMigrate()
                 .showSql()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         userService = victor.createService(UserService.class);

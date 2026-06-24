@@ -1,8 +1,8 @@
 package fr.traqueur.victor.core;
 
-import fr.traqueur.victor.entities.transaction.Transaction;
+import fr.traqueur.victor.entity.transaction.Transaction;
 import fr.traqueur.victor.exceptions.VictorTransactionException;
-import fr.traqueur.victor.dto.UserDto;
+import fr.traqueur.victor.entity.UserEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +23,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
     void testTransactionCommit() {
         victor.transaction(() -> {
             userRepository.save(
-                    new UserDto(null,
+                    new UserEntity(null,
                             "tx_" + System.nanoTime(),
                             "tx@test.com", 25, true, "TX"));
         });
@@ -36,7 +36,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
         assertThrows(RuntimeException.class, () -> {
             victor.transaction(() -> {
                 userRepository.save(
-                        new UserDto(null,
+                        new UserEntity(null,
                                 "rollback_" + System.nanoTime(),
                                 "rb@test.com", 25, true, "RB"));
                 throw new RuntimeException("fail");
@@ -51,7 +51,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
         Transaction tx = victor.beginTransaction();
 
         userRepository.save(
-                new UserDto(null,
+                new UserEntity(null,
                         "autorollback",
                         "auto@example.com",
                         25,
@@ -63,7 +63,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
         tx.close();
 
         assertEquals(0, userRepository.count());
-        Optional<UserDto> found = userRepository.findByUsername("autorollback");
+        Optional<UserEntity> found = userRepository.findByUsername("autorollback");
         assertFalse(found.isPresent());
     }
 
@@ -73,7 +73,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
             victor.transaction(() -> {
 
                 userRepository.save(
-                        new UserDto(null,
+                        new UserEntity(null,
                                 "outer",
                                 "outer@example.com",
                                 25,
@@ -84,7 +84,7 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
                 // Nested transaction
                 victor.transaction(() -> {
                     userRepository.save(
-                            new UserDto(null,
+                            new UserEntity(null,
                                     "inner",
                                     "inner@example.com",
                                     30,
@@ -102,8 +102,8 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
     @Test
     void testTransactionUpdateAndCommit() {
 
-        UserDto saved = userRepository.save(
-                new UserDto(null,
+        UserEntity saved = userRepository.save(
+                new UserEntity(null,
                         "isolated",
                         "isolated@example.com",
                         25,
@@ -112,10 +112,10 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
         );
 
         victor.transaction(() -> {
-            Optional<UserDto> user = userRepository.findById(saved.id());
+            Optional<UserEntity> user = userRepository.findById(saved.id());
             assertTrue(user.isPresent());
 
-            UserDto updated = new UserDto(
+            UserEntity updated = new UserEntity(
                     user.get().id(),
                     user.get().username(),
                     "updated@example.com",
@@ -126,12 +126,12 @@ public abstract class AbstractTransactionTest extends AbstractVictorTest {
 
             userRepository.save(updated);
 
-            Optional<UserDto> inTx = userRepository.findById(saved.id());
+            Optional<UserEntity> inTx = userRepository.findById(saved.id());
             assertEquals("updated@example.com", inTx.get().email());
             assertEquals(30, inTx.get().age());
         });
 
-        Optional<UserDto> afterCommit = userRepository.findById(saved.id());
+        Optional<UserEntity> afterCommit = userRepository.findById(saved.id());
 
         assertTrue(afterCommit.isPresent());
         assertEquals("updated@example.com", afterCommit.get().email());

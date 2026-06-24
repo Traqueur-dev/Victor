@@ -10,10 +10,10 @@ import java.lang.annotation.Target;
 public @interface OneToOne {
 
     /**
-     * Target DTO class. Required on the owning side (the side that holds the FK column).
+     * Target E class. Required on the owning side (the side that holds the FK column).
      * Leave default on the inverse side and use {@link #mappedBy()} instead.
      */
-    Class<?> targetDto() default Void.class;
+    Class<?> targetEntity() default Void.class;
 
     /**
      * FK column name in the current table (owning side).
@@ -22,8 +22,8 @@ public @interface OneToOne {
     String column() default "";
 
     /**
-     * Field name in the target DTO that holds the @OneToOne pointing back (inverse side).
-     * Set this on the inverse side instead of targetDto/column.
+     * Field name in the target E that holds the @OneToOne pointing back (inverse side).
+     * Set this on the inverse side instead of targetEntity/column.
      */
     String mappedBy() default "";
 

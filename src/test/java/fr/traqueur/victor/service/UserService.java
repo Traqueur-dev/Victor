@@ -1,9 +1,9 @@
 package fr.traqueur.victor.service;
 
-import fr.traqueur.victor.entities.Service;
-import fr.traqueur.victor.dto.UserDto;
-import fr.traqueur.victor.entities.User;
+import fr.traqueur.victor.entity.Service;
+import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.model.User;
 import fr.traqueur.victor.repository.UserRepository;
 
-public interface UserService extends Service<User, UserDto, Long, UserRepository> {
+public interface UserService extends Service<User, UserEntity, Long, UserRepository> {
 }

@@ -3,14 +3,14 @@ package fr.traqueur.victor.database.migration;
 import fr.traqueur.victor.VictorConfiguration;
 import fr.traqueur.victor.annotations.VictorIndex;
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.DtoMetadata;
-import fr.traqueur.victor.entities.metadata.FieldMetadata;
-import fr.traqueur.victor.entities.metadata.RelationshipMetadata;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.entity.metadata.FieldMetadata;
+import fr.traqueur.victor.entity.metadata.RelationshipMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
-import fr.traqueur.victor.registries.DtoMetadataRegistry;
-import fr.traqueur.victor.scanner.DtoScanner;
+import fr.traqueur.victor.registries.EntityMetadataRegistry;
+import fr.traqueur.victor.scanner.EntityScanner;
 import fr.traqueur.victor.utils.VictorLogger;
 
 import java.lang.reflect.RecordComponent;
@@ -34,23 +34,23 @@ public final class AutoMigration {
             return;
         }
 
-        Set<Class<? extends Dto<?>>> dtoClasses = configuration.dtoClasses();
+        Set<Class<? extends Entity<?>>> entityClasses = configuration.entityClasses();
 
-        if (dtoClasses.isEmpty()) {
-            VictorLogger.warn("No DTO classes found. Attempting auto-scan...");
-            dtoClasses = DtoScanner.scanForDtos();
+        if (entityClasses.isEmpty()) {
+            VictorLogger.warn("No E classes found. Attempting auto-scan...");
+            entityClasses = EntityScanner.scanForEntities();
         }
 
         Set<String> existingTables = getExistingTables();
         VictorLogger.debug("Found existing tables: " + existingTables);
 
         // Phase 1 — Create/update scalar tables
-        for (Class<?> dtoClass : dtoClasses) {
+        for (Class<?> entityClass : entityClasses) {
             try {
-                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
                 migrateTable(metadata, existingTables);
             } catch (Exception e) {
-                VictorLogger.error("Failed to migrate DTO {}: {}", dtoClass.getSimpleName(), e.getMessage());
+                VictorLogger.error("Failed to migrate E {}: {}", entityClass.getSimpleName(), e.getMessage());
             }
         }
 
@@ -58,40 +58,40 @@ public final class AutoMigration {
         existingTables = getExistingTables();
 
         // Phase 2 — FK columns for owning-side relationships (ManyToOne / OneToOne owning)
-        for (Class<?> dtoClass : dtoClasses) {
+        for (Class<?> entityClass : entityClasses) {
             try {
-                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
                 migrateForeignKeyColumns(metadata);
             } catch (Exception e) {
-                VictorLogger.error("Failed to migrate FK columns for {}: {}", dtoClass.getSimpleName(), e.getMessage());
+                VictorLogger.error("Failed to migrate FK columns for {}: {}", entityClass.getSimpleName(), e.getMessage());
             }
         }
 
         // Phase 3 — Junction tables (ManyToMany)
         Set<String> processedJoinTables = new HashSet<>();
-        for (Class<?> dtoClass : dtoClasses) {
+        for (Class<?> entityClass : entityClasses) {
             try {
-                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
                 migrateJunctionTables(metadata, processedJoinTables);
             } catch (Exception e) {
-                VictorLogger.error("Failed to migrate junction tables for {}: {}", dtoClass.getSimpleName(), e.getMessage());
+                VictorLogger.error("Failed to migrate junction tables for {}: {}", entityClass.getSimpleName(), e.getMessage());
             }
         }
 
         // Phase 4 — Indexes
-        for (Class<?> dtoClass : dtoClasses) {
+        for (Class<?> entityClass : entityClasses) {
             try {
-                DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+                EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
                 processIndexes(metadata);
             } catch (Exception e) {
-                VictorLogger.error("Failed to process indexes for {}: {}", dtoClass.getSimpleName(), e.getMessage());
+                VictorLogger.error("Failed to process indexes for {}: {}", entityClass.getSimpleName(), e.getMessage());
             }
         }
     }
 
     // ========== Phase 1: Table migration ==========
 
-    private void migrateTable(DtoMetadata metadata, Set<String> existingTables) {
+    private void migrateTable(EntityMetadata metadata, Set<String> existingTables) {
         String tableName = metadata.getTableName().toLowerCase();
 
         if (existingTables.contains(tableName)) {
@@ -102,7 +102,7 @@ public final class AutoMigration {
         }
     }
 
-    private void createTable(DtoMetadata metadata) {
+    private void createTable(EntityMetadata metadata) {
         if (metadata.getSchema() != null && dialect.supportsSchemas()) {
             String createSchemaSQL = dialect.generateCreateSchema(metadata.getSchema());
             if (createSchemaSQL != null) {
@@ -126,7 +126,7 @@ public final class AutoMigration {
 
     // ========== ALTER TABLE — schema diff ==========
 
-    private void updateTableIfNeeded(DtoMetadata metadata) {
+    private void updateTableIfNeeded(EntityMetadata metadata) {
         List<DatabaseColumn> existingColumns;
         try {
             existingColumns = queryExistingColumns(metadata);
@@ -163,7 +163,7 @@ public final class AutoMigration {
 
         for (String removedCol : removedColumns) {
             VictorLogger.warn(
-                    "Column '{}' exists in table '{}' but is not defined in the DTO. " +
+                    "Column '{}' exists in table '{}' but is not defined in the E. " +
                     "Victor will NOT drop this column automatically to prevent data loss.",
                     removedCol, metadata.getTableName()
             );
@@ -184,7 +184,7 @@ public final class AutoMigration {
                 String normalizedActual = normalizeTypeName(dbCol.dataType());
                 if (!normalizedExpected.equals(normalizedActual)) {
                     VictorLogger.warn(
-                            "Column '{}' in table '{}' has type '{}' but DTO expects '{}'. " +
+                            "Column '{}' in table '{}' has type '{}' but E expects '{}'. " +
                             "Victor will NOT alter column types automatically.",
                             colName, metadata.getTableName(), dbCol.dataType(), expectedType
                     );
@@ -193,7 +193,7 @@ public final class AutoMigration {
         }
     }
 
-    private void addColumn(DtoMetadata metadata, FieldMetadata field) {
+    private void addColumn(EntityMetadata metadata, FieldMetadata field) {
         boolean isSqlite = "sqlite".equalsIgnoreCase(dialect.getName());
 
         if (isSqlite && !field.isNullable() && !field.hasDefaultValue()) {
@@ -226,7 +226,7 @@ public final class AutoMigration {
 
     // ========== Phase 2: FK columns ==========
 
-    private void migrateForeignKeyColumns(DtoMetadata metadata) {
+    private void migrateForeignKeyColumns(EntityMetadata metadata) {
         for (RelationshipMetadata rel : metadata.getOwningSideRelationships()) {
             String fkColumn = rel.getForeignKeyColumn();
 
@@ -241,7 +241,7 @@ public final class AutoMigration {
                     .anyMatch(c -> c.columnName().equalsIgnoreCase(fkColumn));
 
             if (!fkExists) {
-                DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+                EntityMetadata targetMeta = EntityMetadataRegistry.getInstance().getMetadata(rel.getTargetEntityClass());
                 FieldMetadata fkField = FieldMetadata.forForeignKey(
                         fkColumn, targetMeta.getIdField().getJavaType(), rel.isNullable()
                 );
@@ -249,7 +249,7 @@ public final class AutoMigration {
             }
 
             // Optionally add FK constraint (SQLiteDialect returns null)
-            DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+            EntityMetadata targetMeta = EntityMetadataRegistry.getInstance().getMetadata(rel.getTargetEntityClass());
             String fkSql = dialect.generateAddForeignKeyConstraint(
                     metadata.getTableName(), fkColumn,
                     targetMeta.getTableName(), targetMeta.getIdField().getColumnName()
@@ -268,14 +268,14 @@ public final class AutoMigration {
 
     // ========== Phase 3: Junction tables ==========
 
-    private void migrateJunctionTables(DtoMetadata metadata, Set<String> processedJoinTables) {
+    private void migrateJunctionTables(EntityMetadata metadata, Set<String> processedJoinTables) {
         for (RelationshipMetadata rel : metadata.getRelationships()) {
             if (rel.getType() != RelationshipMetadata.RelationType.MANY_TO_MANY) continue;
 
             String joinTable = rel.getJoinTable();
             if (!processedJoinTables.add(joinTable)) continue; // already created
 
-            DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+            EntityMetadata targetMeta = EntityMetadataRegistry.getInstance().getMetadata(rel.getTargetEntityClass());
 
             String createSql = dialect.generateCreateJoinTable(
                     joinTable,
@@ -294,23 +294,23 @@ public final class AutoMigration {
 
     // ========== Phase 4: Index processing ==========
 
-    private void processIndexes(DtoMetadata metadata) {
-        Class<?> dtoClass = metadata.getDtoClass();
+    private void processIndexes(EntityMetadata metadata) {
+        Class<?> entityClass = metadata.getEntityClass();
 
         // Class-level @VictorIndex annotations
-        VictorIndex[] classIndexes = dtoClass.getAnnotationsByType(VictorIndex.class);
+        VictorIndex[] classIndexes = entityClass.getAnnotationsByType(VictorIndex.class);
         for (VictorIndex idx : classIndexes) {
             if (idx.columns().length == 0) {
                 VictorLogger.warn("@VictorIndex on class {} has no columns defined, skipping.",
-                        dtoClass.getSimpleName());
+                        entityClass.getSimpleName());
                 continue;
             }
             createIndex(metadata, idx.name(), idx.columns(), idx.unique(), idx.where());
         }
 
         // Field/component-level @VictorIndex annotations
-        if (dtoClass.isRecord()) {
-            for (RecordComponent component : dtoClass.getRecordComponents()) {
+        if (entityClass.isRecord()) {
+            for (RecordComponent component : entityClass.getRecordComponents()) {
                 VictorIndex[] fieldIndexes = component.getAnnotationsByType(VictorIndex.class);
                 for (VictorIndex idx : fieldIndexes) {
                     // Resolve column name from FieldMetadata
@@ -321,7 +321,7 @@ public final class AutoMigration {
                 }
             }
         } else {
-            Class<?> current = dtoClass;
+            Class<?> current = entityClass;
             while (current != null && current != Object.class) {
                 for (java.lang.reflect.Field field : current.getDeclaredFields()) {
                     VictorIndex[] fieldIndexes = field.getAnnotationsByType(VictorIndex.class);
@@ -337,7 +337,7 @@ public final class AutoMigration {
         }
     }
 
-    private void createIndex(DtoMetadata metadata, String name, String[] columns,
+    private void createIndex(EntityMetadata metadata, String name, String[] columns,
                              boolean unique, String where) {
         String indexName = name.isEmpty()
                 ? generateIndexName(metadata.getTableName(), columns, unique)
@@ -365,7 +365,7 @@ public final class AutoMigration {
 
     // ========== Column introspection ==========
 
-    private List<DatabaseColumn> queryExistingColumns(DtoMetadata metadata) {
+    private List<DatabaseColumn> queryExistingColumns(EntityMetadata metadata) {
         String sql = dialect.generateListColumnsSQL(metadata.getTableName(), metadata.getSchema());
 
         if ("sqlite".equalsIgnoreCase(dialect.getName())) {
@@ -434,10 +434,10 @@ public final class AutoMigration {
     }
 
     private String determineSchemaForTableListing() {
-        var schemas = configuration.dtoClasses().stream()
+        var schemas = configuration.entityClasses().stream()
                 .map(clazz -> {
                     try {
-                        DtoMetadata metadata = DtoMetadataRegistry.getInstance().getMetadata(clazz);
+                        EntityMetadata metadata = EntityMetadataRegistry.getInstance().getMetadata(clazz);
                         return metadata.getSchema();
                     } catch (Exception e) {
                         return null;

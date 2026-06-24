@@ -3,7 +3,7 @@ package fr.traqueur.victor.dialect.mysql;
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.core.AbstractTestRunner;
-import fr.traqueur.victor.dto.UserDto;
+import fr.traqueur.victor.entity.UserEntity;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -52,12 +52,12 @@ class MySQLTest extends AbstractTestRunner {
         VictorLogger.info("\n=== MySQL-Specific Test: InnoDB Engine ===");
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
         UserRepository repo = victor.createRepository(UserRepository.class);
 
-        UserDto saved = repo.save(
-                new UserDto(null,
+        UserEntity saved = repo.save(
+                new UserEntity(null,
                         "innodb_test_" + System.nanoTime(),
                         "test@test.com",
                         25,
@@ -79,17 +79,17 @@ class MySQLTest extends AbstractTestRunner {
         String username = "emoji_test_😀_" + System.nanoTime();
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
         UserRepository repo = victor.createRepository(UserRepository.class);
 
-        UserDto saved = repo.save(
-                new UserDto(null, username, "emoji@test.com", 25, true, "Emoji")
+        UserEntity saved = repo.save(
+                new UserEntity(null, username, "emoji@test.com", 25, true, "Emoji")
         );
 
         assertNotNull(saved.id());
 
-        Optional<UserDto> found = repo.findByUsername(username);
+        Optional<UserEntity> found = repo.findByUsername(username);
         assertTrue(found.isPresent());
         victor.close();
 
@@ -102,12 +102,12 @@ class MySQLTest extends AbstractTestRunner {
         VictorLogger.info("\n=== MySQL-Specific Test: Upsert ===");
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
         UserRepository repo = victor.createRepository(UserRepository.class);
 
-        UserDto user = repo.save(
-                new UserDto(null,
+        UserEntity user = repo.save(
+                new UserEntity(null,
                         "upsert_test_" + System.nanoTime(),
                         "test@test.com",
                         25,
@@ -117,7 +117,7 @@ class MySQLTest extends AbstractTestRunner {
 
         Long id = user.id();
 
-        UserDto updated = new UserDto(
+        UserEntity updated = new UserEntity(
                 id,
                 user.username(),
                 "upserted@example.com",
@@ -128,7 +128,7 @@ class MySQLTest extends AbstractTestRunner {
 
         repo.save(updated);
 
-        Optional<UserDto> found = repo.findById(id);
+        Optional<UserEntity> found = repo.findById(id);
 
         assertTrue(found.isPresent());
         assertEquals("upserted@example.com", found.get().email());

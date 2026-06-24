@@ -1,8 +1,8 @@
 package fr.traqueur.victor.repository;
 
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.dto.StudentDto;
-import fr.traqueur.victor.entities.Student;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.StudentEntity;
+import fr.traqueur.victor.model.Student;
 
-public interface StudentRepository extends Repository<StudentDto, Student, Long> {
+public interface StudentRepository extends Repository<StudentEntity, Student, Long> {
 }

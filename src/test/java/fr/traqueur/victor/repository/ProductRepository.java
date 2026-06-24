@@ -1,8 +1,8 @@
 package fr.traqueur.victor.repository;
 
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.dto.ProductDto;
-import fr.traqueur.victor.entities.Product;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.ProductEntity;
+import fr.traqueur.victor.model.Product;
 
-public interface ProductRepository extends Repository<ProductDto, Product, Long> {
+public interface ProductRepository extends Repository<ProductEntity, Product, Long> {
 }

@@ -1,7 +1,7 @@
 package fr.traqueur.victor.registries;
 
 import fr.traqueur.victor.Victor;
-import fr.traqueur.victor.entities.dialect.Dialect;
+import fr.traqueur.victor.entity.dialect.Dialect;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
 import fr.traqueur.victor.utils.VictorLogger;
 

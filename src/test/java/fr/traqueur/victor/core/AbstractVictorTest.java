@@ -1,11 +1,11 @@
 package fr.traqueur.victor.core;
 
 import fr.traqueur.victor.*;
-import fr.traqueur.victor.dto.AuthorDto;
-import fr.traqueur.victor.dto.BookDto;
-import fr.traqueur.victor.dto.CourseDto;
-import fr.traqueur.victor.dto.StudentDto;
-import fr.traqueur.victor.dto.UserDto;
+import fr.traqueur.victor.entity.AuthorEntity;
+import fr.traqueur.victor.entity.BookEntity;
+import fr.traqueur.victor.entity.CourseEntity;
+import fr.traqueur.victor.entity.StudentEntity;
+import fr.traqueur.victor.entity.UserEntity;
 import fr.traqueur.victor.repository.AuthorRepository;
 import fr.traqueur.victor.repository.BookRepository;
 import fr.traqueur.victor.repository.CourseRepository;
@@ -31,12 +31,12 @@ public abstract class AbstractVictorTest {
         VictorBuilder builder = configureVictor()
                 .showSql()
                 .autoMigrate()
-                .dtos(
-                        UserDto.class,
-                        AuthorDto.class,
-                        BookDto.class,
-                        StudentDto.class,
-                        CourseDto.class
+                .entities(
+                        UserEntity.class,
+                        AuthorEntity.class,
+                        BookEntity.class,
+                        StudentEntity.class,
+                        CourseEntity.class
                 );
 
         victor = builder.build();

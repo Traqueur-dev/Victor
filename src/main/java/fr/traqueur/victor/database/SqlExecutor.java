@@ -1,8 +1,8 @@
 package fr.traqueur.victor.database;
 
-import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.FieldMetadata;
-import fr.traqueur.victor.entities.transaction.TransactionContext;
+import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.metadata.FieldMetadata;
+import fr.traqueur.victor.entity.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.managers.ConnectionManager;
 import fr.traqueur.victor.utils.VictorLogger;

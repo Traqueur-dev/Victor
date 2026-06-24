@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
 public @interface OneToMany {
 
     /**
-     * Name of the @ManyToOne field in the target DTO that holds the FK back to this entity.
+     * Name of the @ManyToOne field in the target E that holds the FK back to this entity.
      */
     String mappedBy();
 

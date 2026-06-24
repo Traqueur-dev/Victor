@@ -3,7 +3,7 @@ package fr.traqueur.victor.managers;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import fr.traqueur.victor.VictorConfiguration;
-import fr.traqueur.victor.entities.transaction.TransactionContext;
+import fr.traqueur.victor.entity.transaction.TransactionContext;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.utils.VictorLogger;
 

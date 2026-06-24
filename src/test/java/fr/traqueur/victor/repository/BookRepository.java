@@ -1,12 +1,12 @@
 package fr.traqueur.victor.repository;
 
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.dto.BookDto;
-import fr.traqueur.victor.entities.Book;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.BookEntity;
+import fr.traqueur.victor.model.Book;
 
 import java.util.List;
 
-public interface BookRepository extends Repository<BookDto, Book, Long> {
+public interface BookRepository extends Repository<BookEntity, Book, Long> {
 
-    List<BookDto> findByTitle(String title);
+    List<BookEntity> findByTitle(String title);
 }

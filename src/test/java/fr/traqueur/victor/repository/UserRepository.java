@@ -1,54 +1,54 @@
 package fr.traqueur.victor.repository;
 
 import fr.traqueur.victor.annotations.Query;
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.dto.UserDto;
-import fr.traqueur.victor.entities.User;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.model.User;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface UserRepository extends Repository<UserDto, User, Long> {
+public interface UserRepository extends Repository<UserEntity, User, Long> {
     
     // Test 1: Égalité simple
-    Optional<UserDto> findByUsername(String username);
+    Optional<UserEntity> findByUsername(String username);
     
     // Test 2: AND
-    Optional<UserDto> findByUsernameAndEmail(String username, String email);
+    Optional<UserEntity> findByUsernameAndEmail(String username, String email);
     
     // Test 3: OR
-    List<UserDto> findByUsernameOrEmail(String username, String email);
+    List<UserEntity> findByUsernameOrEmail(String username, String email);
     
     // Test 4: GreaterThan
-    List<UserDto> findByAgeGreaterThan(int age);
+    List<UserEntity> findByAgeGreaterThan(int age);
     
     // Test 5: LessThan
-    List<UserDto> findByAgeLessThan(int age);
+    List<UserEntity> findByAgeLessThan(int age);
     
     // Test 6: Like
-    List<UserDto> findByNameLike(String pattern);
+    List<UserEntity> findByNameLike(String pattern);
     
     // Test 7: IsNull
-    List<UserDto> findByEmailIsNull();
+    List<UserEntity> findByEmailIsNull();
     
     // Test 8: IsNotNull
-    List<UserDto> findByEmailIsNotNull();
+    List<UserEntity> findByEmailIsNotNull();
     
     // Test 9: ORDER BY
-    List<UserDto> findByActiveOrderByUsernameAsc(boolean active);
+    List<UserEntity> findByActiveOrderByUsernameAsc(boolean active);
     
     // Test 10: ORDER BY DESC
-    List<UserDto> findByActiveOrderByUsernameDesc(boolean active);
+    List<UserEntity> findByActiveOrderByUsernameDesc(boolean active);
     
     // Test 11: Combinaison complexe
-    List<UserDto> findByActiveAndAgeGreaterThanOrderByNameAsc(boolean active, int age);
+    List<UserEntity> findByActiveAndAgeGreaterThanOrderByNameAsc(boolean active, int age);
 
     @Query("SELECT * FROM users WHERE age > ? AND active = ?")
-    List<UserDto> findActiveUsersOlderThan(int age, boolean active);
+    List<UserEntity> findActiveUsersOlderThan(int age, boolean active);
 
     // Query avec paramètres nommés
     @Query("SELECT * FROM users WHERE username = :username")
-    Optional<UserDto> findByUsernameCustom(String username);
+    Optional<UserEntity> findByUsernameCustom(String username);
 
     // Query de comptage
     @Query("SELECT COUNT(*) FROM users WHERE active = :active")

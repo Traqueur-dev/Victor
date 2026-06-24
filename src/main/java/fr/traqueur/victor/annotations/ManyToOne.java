@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 @Target({ElementType.FIELD, ElementType.RECORD_COMPONENT})
 public @interface ManyToOne {
 
-    Class<?> targetDto();
+    Class<?> targetEntity();
 
     /**
      * Name of the FK column in the current table.

@@ -1,10 +1,10 @@
 package fr.traqueur.victor.relationship;
 
 import fr.traqueur.victor.annotations.FetchType;
-import fr.traqueur.victor.entities.metadata.DtoMetadata;
-import fr.traqueur.victor.entities.metadata.RelationshipMetadata;
-import fr.traqueur.victor.dto.AuthorDto;
-import fr.traqueur.victor.dto.BookDto;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.entity.metadata.RelationshipMetadata;
+import fr.traqueur.victor.entity.AuthorEntity;
+import fr.traqueur.victor.entity.BookEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -21,19 +21,19 @@ public class RelationshipTest {
 
     @Test
     @Order(1)
-    @DisplayName("Metadata: BookDto has a @ManyToOne relationship")
-    void testBookDtoManyToOneMetadata() {
-        DtoMetadata meta = DtoMetadata.of(BookDto.class);
+    @DisplayName("Metadata: BookEntity has a @ManyToOne relationship")
+    void testBookEntityManyToOneMetadata() {
+        EntityMetadata meta = EntityMetadata.of(BookEntity.class);
 
         assertEquals("books", meta.getTableName());
 
         List<RelationshipMetadata> rels = meta.getRelationships();
-        assertEquals(1, rels.size(), "BookDto should have exactly one relationship");
+        assertEquals(1, rels.size(), "BookEntity should have exactly one relationship");
 
         RelationshipMetadata rel = rels.getFirst();
         assertEquals(RelationshipMetadata.RelationType.MANY_TO_ONE, rel.getType());
         assertEquals("author", rel.getFieldName());
-        assertEquals(AuthorDto.class, rel.getTargetDtoClass());
+        assertEquals(AuthorEntity.class, rel.getTargetEntityClass());
         assertEquals("author_id", rel.getForeignKeyColumn());
         assertEquals(FetchType.EAGER, rel.getFetchType());
         assertTrue(rel.ownsForeignKey(), "ManyToOne should own the FK column");
@@ -42,19 +42,19 @@ public class RelationshipTest {
 
     @Test
     @Order(2)
-    @DisplayName("Metadata: AuthorDto has a @OneToMany relationship")
-    void testAuthorDtoOneToManyMetadata() {
-        DtoMetadata meta = DtoMetadata.of(AuthorDto.class);
+    @DisplayName("Metadata: AuthorEntity has a @OneToMany relationship")
+    void testAuthorEntityOneToManyMetadata() {
+        EntityMetadata meta = EntityMetadata.of(AuthorEntity.class);
 
         assertEquals("authors", meta.getTableName());
 
         List<RelationshipMetadata> rels = meta.getRelationships();
-        assertEquals(1, rels.size(), "AuthorDto should have exactly one relationship");
+        assertEquals(1, rels.size(), "AuthorEntity should have exactly one relationship");
 
         RelationshipMetadata rel = rels.getFirst();
         assertEquals(RelationshipMetadata.RelationType.ONE_TO_MANY, rel.getType());
         assertEquals("books", rel.getFieldName());
-        assertEquals(BookDto.class, rel.getTargetDtoClass());
+        assertEquals(BookEntity.class, rel.getTargetEntityClass());
         assertEquals("author", rel.getMappedByField());
         assertEquals(FetchType.EAGER, rel.getFetchType());
         assertFalse(rel.ownsForeignKey(), "OneToMany should not own the FK column");
@@ -63,9 +63,9 @@ public class RelationshipTest {
 
     @Test
     @Order(3)
-    @DisplayName("Metadata: BookDto scalar fields don't include the FK as a regular column")
-    void testBookDtoScalarFieldsExcludeRelation() {
-        DtoMetadata meta = DtoMetadata.of(BookDto.class);
+    @DisplayName("Metadata: BookEntity scalar fields don't include the FK as a regular column")
+    void testBookEntityScalarFieldsExcludeRelation() {
+        EntityMetadata meta = EntityMetadata.of(BookEntity.class);
 
         // Scalar fields: only id and title (author is a relationship)
         assertEquals(2, meta.getScalarFields().size());
@@ -77,8 +77,8 @@ public class RelationshipTest {
     @Test
     @Order(4)
     @DisplayName("Metadata: getAllPersistableFields includes synthetic FK author_id")
-    void testBookDtoAllPersistableFields() {
-        DtoMetadata meta = DtoMetadata.of(BookDto.class);
+    void testBookEntityAllPersistableFields() {
+        EntityMetadata meta = EntityMetadata.of(BookEntity.class);
 
         // All persistable: id + title + author_id (synthetic FK)
         List<?> allFields = meta.getAllPersistableFields();

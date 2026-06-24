@@ -1,6 +1,6 @@
 package fr.traqueur.victor.managers;
 
-import fr.traqueur.victor.entities.transaction.*;
+import fr.traqueur.victor.entity.transaction.*;
 import fr.traqueur.victor.exceptions.VictorTransactionException;
 
 import java.sql.Connection;

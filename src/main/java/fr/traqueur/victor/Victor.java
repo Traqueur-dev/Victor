@@ -1,12 +1,12 @@
 package fr.traqueur.victor;
 
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.Entity;
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.entities.Service;
-import fr.traqueur.victor.entities.transaction.Transaction;
-import fr.traqueur.victor.entities.transaction.TransactionalCallable;
-import fr.traqueur.victor.entities.transaction.TransactionalOperation;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.Model;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.Service;
+import fr.traqueur.victor.entity.transaction.Transaction;
+import fr.traqueur.victor.entity.transaction.TransactionalCallable;
+import fr.traqueur.victor.entity.transaction.TransactionalOperation;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.managers.TransactionManager;
 
@@ -21,11 +21,11 @@ public final class Victor {
         this.transactionManager = engine.getTransactionManager();
     }
 
-    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T withRepository(Class<T> repositoryClass) {
+    public static <E extends Entity<MODEL>, MODEL extends Model<ID>, ID, T extends Repository<E,MODEL,ID>> T withRepository(Class<T> repositoryClass) {
         return getDefaultOrThrow().createRepository(repositoryClass);
     }
 
-    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, REPO extends Repository<DTO,MODEL,ID>, T extends Service<MODEL, DTO, ID, REPO>> T withService(Class<T> serviceClass) {
+    public static <E extends Entity<MODEL>, MODEL extends Model<ID>, ID, REPO extends Repository<E,MODEL,ID>, T extends Service<MODEL, E, ID, REPO>> T withService(Class<T> serviceClass) {
         return getDefaultOrThrow().createService(serviceClass);
     }
 
@@ -66,7 +66,7 @@ public final class Victor {
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
-                .autoScanDtos()
+                .autoScanEntities()
                 .build());
     }
 
@@ -75,7 +75,7 @@ public final class Victor {
                 .url(jdbcUrl)
                 .autoDetectDialect()
                 .autoMigrate()
-                .autoScanDtos(packages)
+                .autoScanEntities(packages)
                 .build());
     }
 
@@ -115,11 +115,11 @@ public final class Victor {
                 .build();
     }
 
-    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, T extends Repository<DTO,MODEL,ID>> T createRepository(Class<T> repositoryClass) {
+    public <E extends Entity<MODEL>, MODEL extends Model<ID>, ID, T extends Repository<E,MODEL,ID>> T createRepository(Class<T> repositoryClass) {
         return engine.createRepository(repositoryClass);
     }
 
-    public <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID, REPO extends Repository<DTO,MODEL,ID>, T extends Service<MODEL, DTO, ID, REPO>> T createService(Class<T> serviceClass) {
+    public <E extends Entity<MODEL>, MODEL extends Model<ID>, ID, REPO extends Repository<E,MODEL,ID>, T extends Service<MODEL, E, ID, REPO>> T createService(Class<T> serviceClass) {
         return engine.createService(serviceClass);
     }
 

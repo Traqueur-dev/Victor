@@ -16,17 +16,17 @@ public final class RelationshipLoadingContext {
 
     private RelationshipLoadingContext() {}
 
-    public static boolean isAlreadyLoading(Class<?> dtoClass) {
-        return LOADING_STACK.get().contains(dtoClass);
+    public static boolean isAlreadyLoading(Class<?> entityClass) {
+        return LOADING_STACK.get().contains(entityClass);
     }
 
-    public static void push(Class<?> dtoClass) {
-        LOADING_STACK.get().add(dtoClass);
+    public static void push(Class<?> entityClass) {
+        LOADING_STACK.get().add(entityClass);
     }
 
-    public static void pop(Class<?> dtoClass) {
+    public static void pop(Class<?> entityClass) {
         Set<Class<?>> stack = LOADING_STACK.get();
-        stack.remove(dtoClass);
+        stack.remove(entityClass);
         if (stack.isEmpty()) {
             LOADING_STACK.remove();
         }

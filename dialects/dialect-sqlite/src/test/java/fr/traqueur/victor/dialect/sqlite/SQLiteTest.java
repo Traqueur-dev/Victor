@@ -4,9 +4,9 @@ import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.core.AbstractMigrationTest;
 import fr.traqueur.victor.core.AbstractTestRunner;
-import fr.traqueur.victor.dto.ProductDto;
-import fr.traqueur.victor.dto.UserDto;
-import fr.traqueur.victor.dto.UserV2Dto;
+import fr.traqueur.victor.entity.ProductEntity;
+import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.entity.UserV2Entity;
 import fr.traqueur.victor.repository.ProductRepository;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.repository.UserV2Repository;
@@ -62,13 +62,13 @@ class SQLiteTest extends AbstractTestRunner {
         Victor victor = configureVictor()
                 .showSql()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         try {
             UserRepository repo = victor.createRepository(UserRepository.class);
 
-            UserDto u1 = repo.save(new UserDto(
+            UserEntity u1 = repo.save(new UserEntity(
                     null,
                     "auto1_" + System.nanoTime(),
                     "a@test.com",
@@ -76,7 +76,7 @@ class SQLiteTest extends AbstractTestRunner {
                     true,
                     "A"));
 
-            UserDto u2 = repo.save(new UserDto(
+            UserEntity u2 = repo.save(new UserEntity(
                     null,
                     "auto2_" + System.nanoTime(),
                     "b@test.com",

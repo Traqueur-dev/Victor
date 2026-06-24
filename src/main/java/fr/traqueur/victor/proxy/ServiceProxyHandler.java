@@ -1,13 +1,13 @@
 package fr.traqueur.victor.proxy;
 
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.Entity;
-import fr.traqueur.victor.entities.Repository;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.Model;
+import fr.traqueur.victor.entity.Repository;
 import fr.traqueur.victor.conversion.VictorConverter;
-import fr.traqueur.victor.entities.Service;
+import fr.traqueur.victor.entity.Service;
 import fr.traqueur.victor.reflections.TypeResolver;
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.dialect.Dialect; // ✅ CHANGEMENT: Ajout du Dialect
+import fr.traqueur.victor.entity.dialect.Dialect; // ✅ CHANGEMENT: Ajout du Dialect
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.lang.reflect.InvocationHandler;
@@ -16,17 +16,17 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 
-public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID, REPO extends Repository<DTO, MODEL, ID>>
+public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL>, ID, REPO extends Repository<E, MODEL, ID>>
         implements InvocationHandler {
 
     private final Class<MODEL> modelClass;
-    private final Class<DTO> dtoClass;
+    private final Class<E> entityClass;
     private final REPO repository;
 
-    public ServiceProxyHandler(Class<? extends Service<MODEL,DTO,ID,REPO>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public ServiceProxyHandler(Class<? extends Service<MODEL,E,ID,REPO>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
         this.modelClass = typeInfo.modelClass();
-        this.dtoClass = typeInfo.dtoClass();
+        this.entityClass = typeInfo.entityClass();
         Class<REPO> repositoryInterface = typeInfo.repositoryClass();
         this.repository = RepositoryProxyHandler.createProxy(
                 repositoryInterface,
@@ -64,10 +64,10 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         }
 
         try {
-            DTO dto = VictorConverter.modelToDto(model, dtoClass);
+            E entity = VictorConverter.modelToEntity(model, entityClass);
 
-            DTO savedDto = repository().save(dto);
-            MODEL savedModel = savedDto.toModel();
+            E savedEntity = repository().save(entity);
+            MODEL savedModel = savedEntity.toModel();
 
             savedModel.afterSave();
             return savedModel;
@@ -79,8 +79,8 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
 
     private Optional<MODEL> findById(ID id) {
         try {
-            Optional<DTO> dtoOptional = repository().findById(id);
-            return dtoOptional.map(Dto::toModel);
+            Optional<E> entityOptional = repository().findById(id);
+            return entityOptional.map(Entity::toModel);
         } catch (Exception e) {
             throw new VictorException("Failed to find model by ID: " + id, e);
         }
@@ -88,9 +88,9 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
 
     private List<MODEL> findAll() {
         try {
-            List<DTO> dtos = repository().findAll();
-            return dtos.stream()
-                    .map(Dto::toModel)
+            List<E> entities = repository().findAll();
+            return entities.stream()
+                    .map(Entity::toModel)
                     .toList();
         } catch (Exception e) {
             throw new VictorException("Failed to find all models", e);
@@ -130,8 +130,8 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
         }
 
         try {
-            DTO dto = VictorConverter.modelToDto(model, dtoClass);
-            repository().delete(dto);
+            E entity = VictorConverter.modelToEntity(model, entityClass);
+            repository().delete(entity);
 
             model.afterDelete();
         } catch (Exception e) {
@@ -181,7 +181,7 @@ public class ServiceProxyHandler<MODEL extends Entity<ID>, DTO extends Dto<MODEL
     }
 
     @SuppressWarnings("unchecked")
-    public static <MODEL extends Entity<ID>, DTO extends Dto<MODEL>, ID, REPO extends Repository<DTO, MODEL, ID>, T extends Service<MODEL,DTO,ID,REPO>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
+    public static <MODEL extends Model<ID>, E extends Entity<MODEL>, ID, REPO extends Repository<E, MODEL, ID>, T extends Service<MODEL,E,ID,REPO>> T createProxy(Class<T> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new ServiceProxyHandler<>(serviceInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(
                 serviceInterface.getClassLoader(),

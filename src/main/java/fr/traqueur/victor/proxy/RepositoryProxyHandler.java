@@ -3,18 +3,18 @@ package fr.traqueur.victor.proxy;
 import fr.traqueur.victor.database.query.DynamicQuerySqlGenerator;
 import fr.traqueur.victor.database.query.MethodNameParser;
 import fr.traqueur.victor.database.query.QueryAnnotationParser;
-import fr.traqueur.victor.entities.Dto;
-import fr.traqueur.victor.entities.Entity;
-import fr.traqueur.victor.entities.Query;
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.entities.metadata.DtoMetadata;
-import fr.traqueur.victor.entities.metadata.FieldMetadata;
-import fr.traqueur.victor.entities.metadata.RelationshipMetadata;
-import fr.traqueur.victor.registries.DtoMetadataRegistry;
+import fr.traqueur.victor.entity.Entity;
+import fr.traqueur.victor.entity.Model;
+import fr.traqueur.victor.entity.Query;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.entity.metadata.FieldMetadata;
+import fr.traqueur.victor.entity.metadata.RelationshipMetadata;
+import fr.traqueur.victor.registries.EntityMetadataRegistry;
 import fr.traqueur.victor.reflections.TypeResolver;
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.database.DtoMapper;
+import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.database.EntityMapper;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.utils.VictorLogger;
 
@@ -25,7 +25,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID>
+public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model<ID>, ID>
         implements InvocationHandler {
 
     private static final Set<String> SQL_KEYWORDS = Set.of(
@@ -37,22 +37,22 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
             "LIKE", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "END"
     );
 
-    private final Class<DTO> dtoClass;
+    private final Class<E> entityClass;
     private final Class<ID> idClass;
-    private final DtoMetadata dtoMetadata;
+    private final EntityMetadata entityMetadata;
     private final SqlExecutor sqlExecutor;
     private final DynamicQuerySqlGenerator sqlGenerator;
     private final Dialect dialect;
 
-    public RepositoryProxyHandler(Class<? extends Repository<DTO, MODEL, ID>> repositoryInterface,
+    public RepositoryProxyHandler(Class<? extends Repository<E, MODEL, ID>> repositoryInterface,
                                   SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveRepositoryTypes(repositoryInterface);
-        this.dtoClass = typeInfo.dtoClass();
+        this.entityClass = typeInfo.entityClass();
         this.idClass = typeInfo.idClass();
-        this.dtoMetadata = DtoMetadataRegistry.getInstance().getMetadata(dtoClass);
+        this.entityMetadata = EntityMetadataRegistry.getInstance().getMetadata(entityClass);
         this.sqlExecutor = sqlExecutor;
         this.dialect = dialect;
-        this.sqlGenerator = new DynamicQuerySqlGenerator(dtoMetadata, dialect, sqlExecutor.isShowSql());
+        this.sqlGenerator = new DynamicQuerySqlGenerator(entityMetadata, dialect, sqlExecutor.isShowSql());
     }
 
     @Override
@@ -65,17 +65,17 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         }
 
         return switch (methodName) {
-            case "save" -> save((DTO) args[0]);
+            case "save" -> save((E) args[0]);
             case "findById" -> findById((ID) args[0]);
             case "findAll" -> findAll();
             case "deleteById" -> { deleteById((ID) args[0]); yield null; }
-            case "delete" -> { delete((DTO) args[0]); yield null; }
+            case "delete" -> { delete((E) args[0]); yield null; }
             case "existsById" -> existsById((ID) args[0]);
             case "count" -> count();
-            case "saveAll" -> saveAll((Collection<DTO>) args[0]);
+            case "saveAll" -> saveAll((Collection<E>) args[0]);
             case "deleteAll" -> {
                 if (args == null || args.length == 0) deleteAll();
-                else deleteAll((Collection<DTO>) args[0]);
+                else deleteAll((Collection<E>) args[0]);
                 yield null;
             }
             case "query" -> query();
@@ -131,7 +131,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
 
     private Object executeCustomSelect(Method method, String sql, Object[] params) {
         Class<?> returnType = method.getReturnType();
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
 
         if (returnType == Optional.class) {
             return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, params, mapper));
@@ -139,31 +139,31 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         if (List.class.isAssignableFrom(returnType)) {
             return sqlExecutor.executeQuery(sql, params, mapper);
         }
-        if (returnType.isAssignableFrom(dtoClass)) {
+        if (returnType.isAssignableFrom(entityClass)) {
             return sqlExecutor.executeQuerySingle(sql, params, mapper);
         }
         throw new VictorException(
                 "Unsupported return type for @Query method: " + returnType +
-                ". Supported types: Optional<DTO>, List<DTO>, DTO");
+                ". Supported types: Optional<E>, List<E>, E");
     }
 
-    private DTO save(DTO dto) {
+    private E save(E entity) {
         try {
-            if (shouldUseSimpleInsert(dto)) {
-                return insert(dto);
+            if (shouldUseSimpleInsert(entity)) {
+                return insert(entity);
             } else {
-                return upsert(dto);
+                return upsert(entity);
             }
         } catch (Exception e) {
-            throw new VictorException("Failed to save entity: " + dto, e);
+            throw new VictorException("Failed to save entity: " + entity, e);
         }
     }
 
-    private boolean shouldUseSimpleInsert(DTO dto) {
-        if (!dtoMetadata.getIdField().isAutoGenerated()) {
+    private boolean shouldUseSimpleInsert(E entity) {
+        if (!entityMetadata.getIdField().isAutoGenerated()) {
             return false;
         }
-        Object idValue = getDtoIdValue(dto);
+        Object idValue = getEntityIdValue(entity);
         return idValue == null || isDefaultId(idValue);
     }
 
@@ -174,46 +174,46 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         return false;
     }
 
-    private DTO insert(DTO dto) {
-        String sql = dialect.generateInsert(dtoMetadata);
-        Object[] params = extractNonIdFieldValues(dto);
+    private E insert(E entity) {
+        String sql = dialect.generateInsert(entityMetadata);
+        Object[] params = extractNonIdFieldValues(entity);
 
-        if (dtoMetadata.getIdField().isAutoGenerated()) {
+        if (entityMetadata.getIdField().isAutoGenerated()) {
             ID generatedId = sqlExecutor.executeInsertWithGeneratedKey(sql, params, idClass);
-            DTO saved = createDtoWithId(dto, generatedId);
+            E saved = createEntityWithId(entity, generatedId);
             saveManyToManyRelationships(saved, generatedId);
             return saved;
         } else {
             sqlExecutor.executeUpdate(sql, params);
-            saveManyToManyRelationships(dto, getDtoIdValue(dto));
-            return dto;
+            saveManyToManyRelationships(entity, getEntityIdValue(entity));
+            return entity;
         }
     }
 
-    private DTO upsert(DTO dto) {
-        String sql = dialect.generateUpsert(dtoMetadata);
-        Object[] params = extractAllFieldValuesWithId(dto);
+    private E upsert(E entity) {
+        String sql = dialect.generateUpsert(entityMetadata);
+        Object[] params = extractAllFieldValuesWithId(entity);
 
         int rowsAffected = sqlExecutor.executeUpdate(sql, params);
         if (rowsAffected == 0) {
-            throw new VictorException("UPSERT failed, no rows affected: " + getDtoIdValue(dto));
+            throw new VictorException("UPSERT failed, no rows affected: " + getEntityIdValue(entity));
         }
-        Object id = getDtoIdValue(dto);
+        Object id = getEntityIdValue(entity);
         clearManyToManyRelationships(id);
-        saveManyToManyRelationships(dto, id);
-        return dto;
+        saveManyToManyRelationships(entity, id);
+        return entity;
     }
 
-    private void saveManyToManyRelationships(DTO dto, Object currentId) {
-        for (RelationshipMetadata rel : dtoMetadata.getRelationships()) {
+    private void saveManyToManyRelationships(E entity, Object currentId) {
+        for (RelationshipMetadata rel : entityMetadata.getRelationships()) {
             if (rel.getType() != RelationshipMetadata.RelationType.MANY_TO_MANY) continue;
-            Object collection = getDtoFieldValue(dto, rel.getFieldName());
+            Object collection = getEntityFieldValue(entity, rel.getFieldName());
             if (!(collection instanceof Collection<?> items) || items.isEmpty()) continue;
             String insertSql = "INSERT INTO " + dialect.quoteIdentifier(rel.getJoinTable())
                     + " (" + dialect.quoteIdentifier(rel.getJoinColumn())
                     + ", " + dialect.quoteIdentifier(rel.getInverseJoinColumn()) + ")"
                     + " VALUES (?, ?)";
-            DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
+            EntityMetadata targetMeta = EntityMetadataRegistry.getInstance().getMetadata(rel.getTargetEntityClass());
             for (Object item : items) {
                 if (item == null) continue;
                 Object targetId = targetMeta.getIdField().getValue(item);
@@ -223,7 +223,7 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private void clearManyToManyRelationships(Object id) {
-        for (RelationshipMetadata rel : dtoMetadata.getRelationships()) {
+        for (RelationshipMetadata rel : entityMetadata.getRelationships()) {
             if (rel.getType() != RelationshipMetadata.RelationType.MANY_TO_MANY) continue;
             String deleteSql = "DELETE FROM " + dialect.quoteIdentifier(rel.getJoinTable())
                     + " WHERE " + dialect.quoteIdentifier(rel.getJoinColumn()) + " = ?";
@@ -231,21 +231,21 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
         }
     }
 
-    private Optional<DTO> findById(ID id) {
-        String sql = dialect.generateSelectById(dtoMetadata);
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+    private Optional<E> findById(ID id) {
+        String sql = dialect.generateSelectById(entityMetadata);
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
         return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, new Object[]{id}, mapper));
     }
 
-    private List<DTO> findAll() {
-        String sql = dialect.generateSelectAll(dtoMetadata);
-        SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+    private List<E> findAll() {
+        String sql = dialect.generateSelectAll(entityMetadata);
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
         return sqlExecutor.executeQuery(sql, null, mapper);
     }
 
     private void deleteById(ID id) {
         // Clean ManyToMany junction tables first
-        for (RelationshipMetadata rel : dtoMetadata.getRelationships()) {
+        for (RelationshipMetadata rel : entityMetadata.getRelationships()) {
             if (rel.getType() == RelationshipMetadata.RelationType.MANY_TO_MANY) {
                 String deleteSql = "DELETE FROM " + dialect.quoteIdentifier(rel.getJoinTable())
                         + " WHERE " + dialect.quoteIdentifier(rel.getJoinColumn()) + " = ?";
@@ -253,15 +253,15 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
             }
         }
 
-        String sql = dialect.generateDelete(dtoMetadata);
+        String sql = dialect.generateDelete(entityMetadata);
         int rowsAffected = sqlExecutor.executeUpdate(sql, new Object[]{id});
         if (rowsAffected == 0) {
-            throw new VictorException("Entity not found for deletion: " + id);
+            throw new VictorException("Model not found for deletion: " + id);
         }
     }
 
-    private void delete(DTO dto) {
-        Object idValue = getDtoIdValue(dto);
+    private void delete(E entity) {
+        Object idValue = getEntityIdValue(entity);
         if (idValue == null) {
             throw new VictorException("Cannot delete entity without ID");
         }
@@ -271,55 +271,55 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     private boolean existsById(ID id) {
-        String sql = dialect.generateExists(dtoMetadata);
+        String sql = dialect.generateExists(entityMetadata);
         return sqlExecutor.executeCount(sql, new Object[]{id}) > 0;
     }
 
     private long count() {
-        String sql = dialect.generateCount(dtoMetadata);
+        String sql = dialect.generateCount(entityMetadata);
         return sqlExecutor.executeCount(sql, null);
     }
 
-    private List<DTO> saveAll(Collection<DTO> dtos) {
-        List<DTO> dtoList = dtos.stream().toList();
-        if (dtoList.isEmpty()) return List.of();
+    private List<E> saveAll(Collection<E> entities) {
+        List<E> entityList = entities.stream().toList();
+        if (entityList.isEmpty()) return List.of();
 
-        boolean allNew = dtoList.stream().allMatch(this::isDtoNew);
-        boolean allExisting = dtoList.stream().noneMatch(this::isDtoNew);
+        boolean allNew = entityList.stream().allMatch(this::isEntityNew);
+        boolean allExisting = entityList.stream().noneMatch(this::isEntityNew);
 
-        if (dtoMetadata.getIdField().isAutoGenerated() && allNew) {
-            return batchInsert(dtoList);
+        if (entityMetadata.getIdField().isAutoGenerated() && allNew) {
+            return batchInsert(entityList);
         } else if (allExisting) {
-            return batchUpsert(dtoList);
+            return batchUpsert(entityList);
         } else {
-            return dtoList.stream().map(this::save).toList();
+            return entityList.stream().map(this::save).toList();
         }
     }
 
-    private boolean isDtoNew(DTO dto) {
-        Object idValue = getDtoIdValue(dto);
+    private boolean isEntityNew(E entity) {
+        Object idValue = getEntityIdValue(entity);
         return idValue == null || isDefaultId(idValue);
     }
 
-    private List<DTO> batchInsert(List<DTO> dtos) {
-        return dtos.stream().map(this::save).toList();
+    private List<E> batchInsert(List<E> entities) {
+        return entities.stream().map(this::save).toList();
     }
 
-    private List<DTO> batchUpsert(List<DTO> dtos) {
-        return dtos.stream().map(this::save).toList();
+    private List<E> batchUpsert(List<E> entities) {
+        return entities.stream().map(this::save).toList();
     }
 
-    private void deleteAll(Collection<DTO> dtos) {
-        dtos.forEach(this::delete);
+    private void deleteAll(Collection<E> entities) {
+        entities.forEach(this::delete);
     }
 
     private void deleteAll() {
-        String tableName = dialect.getFullTableName(dtoMetadata);
+        String tableName = dialect.getFullTableName(entityMetadata);
         sqlExecutor.executeUpdate("DELETE FROM " + tableName, null);
     }
 
-    private Query<DTO> query() {
-        return new QueryProxyHandler<>(dtoClass, dtoMetadata, sqlExecutor, dialect).createProxy();
+    private Query<E> query() {
+        return new QueryProxyHandler<>(entityClass, entityMetadata, sqlExecutor, dialect).createProxy();
     }
 
     private Object handleDynamicFinderMethod(Method method, Object[] args) {
@@ -327,14 +327,14 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
             MethodNameParser.ParsedQuery parsedQuery = MethodNameParser.parse(method);
             String sql = sqlGenerator.generateSql(parsedQuery);
             Object[] preparedArgs = prepareArguments(parsedQuery, args);
-            SqlExecutor.RowMapper<DTO> mapper = DtoMapper.createMapper(dtoClass, dtoMetadata, sqlExecutor);
+            SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
 
             Class<?> returnType = method.getReturnType();
             if (returnType == Optional.class) {
                 return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper));
             } else if (List.class.isAssignableFrom(returnType)) {
                 return sqlExecutor.executeQuery(sql, preparedArgs, mapper);
-            } else if (returnType.isAssignableFrom(dtoClass)) {
+            } else if (returnType.isAssignableFrom(entityClass)) {
                 return sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper);
             } else {
                 throw new VictorException("Unsupported return type for dynamic query: " + returnType);
@@ -374,74 +374,74 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
 
     // ========== Value extraction ==========
 
-    private Object[] extractNonIdFieldValues(DTO dto) {
-        return dtoMetadata.getNonIdFields().stream()
-                .map(field -> getFieldValueForPersist(dto, field))
+    private Object[] extractNonIdFieldValues(E entity) {
+        return entityMetadata.getNonIdFields().stream()
+                .map(field -> getFieldValueForPersist(entity, field))
                 .toArray();
     }
 
-    private Object[] extractAllFieldValuesWithId(DTO dto) {
-        return dtoMetadata.getFields().stream()
-                .map(field -> getFieldValueForPersist(dto, field))
+    private Object[] extractAllFieldValuesWithId(E entity) {
+        return entityMetadata.getFields().stream()
+                .map(field -> getFieldValueForPersist(entity, field))
                 .toArray();
     }
 
     /**
      * Gets the value for a field, handling synthetic FK fields by extracting
-     * the related DTO's ID from the relationship field.
+     * the related E's ID from the relationship field.
      */
-    private Object getFieldValueForPersist(DTO dto, FieldMetadata field) {
+    private Object getFieldValueForPersist(E entity, FieldMetadata field) {
         if (field.isSyntheticFk()) {
-            return extractForeignKeyValue(dto, field.getColumnName());
+            return extractForeignKeyValue(entity, field.getColumnName());
         }
-        return getDtoFieldValue(dto, field.getFieldName());
+        return getEntityFieldValue(entity, field.getFieldName());
     }
 
     /**
      * For a synthetic FK column, finds the owning relationship and extracts
-     * the related DTO's ID value.
+     * the related E's ID value.
      */
-    private Object extractForeignKeyValue(DTO dto, String fkColumnName) {
-        RelationshipMetadata rel = dtoMetadata.getOwningSideRelationships().stream()
+    private Object extractForeignKeyValue(E entity, String fkColumnName) {
+        RelationshipMetadata rel = entityMetadata.getOwningSideRelationships().stream()
                 .filter(r -> r.getForeignKeyColumn().equals(fkColumnName))
                 .findFirst().orElse(null);
         if (rel == null) return null;
 
-        Object relatedDto = getDtoFieldValue(dto, rel.getFieldName());
-        if (relatedDto == null) return null;
+        Object relatedEntity = getEntityFieldValue(entity, rel.getFieldName());
+        if (relatedEntity == null) return null;
 
-        DtoMetadata targetMeta = DtoMetadataRegistry.getInstance().getMetadata(rel.getTargetDtoClass());
-        return targetMeta.getIdField().getValue(relatedDto);
+        EntityMetadata targetMeta = EntityMetadataRegistry.getInstance().getMetadata(rel.getTargetEntityClass());
+        return targetMeta.getIdField().getValue(relatedEntity);
     }
 
-    private Object getDtoIdValue(DTO dto) {
-        return getDtoFieldValue(dto, dtoMetadata.getIdField().getFieldName());
+    private Object getEntityIdValue(E entity) {
+        return getEntityFieldValue(entity, entityMetadata.getIdField().getFieldName());
     }
 
-    private Object getDtoFieldValue(DTO dto, String fieldName) {
+    private Object getEntityFieldValue(E entity, String fieldName) {
         try {
-            if (dtoClass.isRecord()) {
-                Method accessor = dtoClass.getMethod(fieldName);
-                return accessor.invoke(dto);
+            if (entityClass.isRecord()) {
+                Method accessor = entityClass.getMethod(fieldName);
+                return accessor.invoke(entity);
             } else {
-                java.lang.reflect.Field dtoField = findDtoField(dtoClass, fieldName);
-                if (dtoField != null) {
-                    dtoField.setAccessible(true);
-                    return dtoField.get(dto);
+                java.lang.reflect.Field entityField = findEntityField(entityClass, fieldName);
+                if (entityField != null) {
+                    entityField.setAccessible(true);
+                    return entityField.get(entity);
                 }
-                throw new VictorException("Field not found in DTO: " + fieldName);
+                throw new VictorException("Field not found in E: " + fieldName);
             }
         } catch (Exception e) {
-            throw new VictorException("Failed to extract field value from DTO: " + fieldName, e);
+            throw new VictorException("Failed to extract field value from E: " + fieldName, e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private DTO createDtoWithId(DTO dto, ID generatedId) {
-        String idFieldName = dtoMetadata.getIdField().getFieldName();
+    private E createEntityWithId(E entity, ID generatedId) {
+        String idFieldName = entityMetadata.getIdField().getFieldName();
         try {
-            if (dtoClass.isRecord()) {
-                var components = dtoClass.getRecordComponents();
+            if (entityClass.isRecord()) {
+                var components = entityClass.getRecordComponents();
                 Object[] args = new Object[components.length];
                 Class<?>[] types = new Class<?>[components.length];
 
@@ -451,25 +451,25 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
                     if (componentName.equals(idFieldName)) {
                         args[i] = generatedId;
                     } else {
-                        Method accessor = dtoClass.getMethod(componentName);
-                        args[i] = accessor.invoke(dto);
+                        Method accessor = entityClass.getMethod(componentName);
+                        args[i] = accessor.invoke(entity);
                     }
                 }
-                return (DTO) dtoClass.getDeclaredConstructor(types).newInstance(args);
+                return (E) entityClass.getDeclaredConstructor(types).newInstance(args);
             } else {
-                java.lang.reflect.Field dtoField = findDtoField(dtoClass, idFieldName);
-                if (dtoField != null) {
-                    dtoField.setAccessible(true);
-                    dtoField.set(dto, generatedId);
+                java.lang.reflect.Field entityField = findEntityField(entityClass, idFieldName);
+                if (entityField != null) {
+                    entityField.setAccessible(true);
+                    entityField.set(entity, generatedId);
                 }
-                return dto;
+                return entity;
             }
         } catch (Exception e) {
-            throw new VictorException("Failed to create DTO with generated ID", e);
+            throw new VictorException("Failed to create E with generated ID", e);
         }
     }
 
-    private java.lang.reflect.Field findDtoField(Class<?> clazz, String fieldName) {
+    private java.lang.reflect.Field findEntityField(Class<?> clazz, String fieldName) {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
             try {
@@ -482,8 +482,8 @@ public class RepositoryProxyHandler<DTO extends Dto<MODEL>, MODEL extends Entity
     }
 
     @SuppressWarnings("unchecked")
-    public static <DTO extends Dto<MODEL>, MODEL extends Entity<ID>, ID,
-            T extends Repository<DTO, MODEL, ID>> T createProxy(
+    public static <E extends Entity<MODEL>, MODEL extends Model<ID>, ID,
+            T extends Repository<E, MODEL, ID>> T createProxy(
             Class<T> repositoryInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var handler = new RepositoryProxyHandler<>(repositoryInterface, sqlExecutor, dialect);
         return (T) Proxy.newProxyInstance(

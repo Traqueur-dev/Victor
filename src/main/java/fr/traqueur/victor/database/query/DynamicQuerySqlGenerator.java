@@ -1,8 +1,8 @@
 package fr.traqueur.victor.database.query;
 
-import fr.traqueur.victor.entities.dialect.Dialect;
-import fr.traqueur.victor.entities.metadata.DtoMetadata;
-import fr.traqueur.victor.entities.metadata.FieldMetadata;
+import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.entity.metadata.FieldMetadata;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.utils.StringUtils;
 import fr.traqueur.victor.utils.VictorLogger;
@@ -16,12 +16,12 @@ import java.util.stream.Collectors;
  */
 public final class DynamicQuerySqlGenerator {
 
-    private final DtoMetadata dtoMetadata;
+    private final EntityMetadata entityMetadata;
     private final Dialect dialect;
     private final boolean showSql;
 
-    public DynamicQuerySqlGenerator(DtoMetadata dtoMetadata, Dialect dialect, boolean showSql) {
-        this.dtoMetadata = dtoMetadata;
+    public DynamicQuerySqlGenerator(EntityMetadata entityMetadata, Dialect dialect, boolean showSql) {
+        this.entityMetadata = entityMetadata;
         this.dialect = dialect;
         this.showSql = showSql;
     }
@@ -125,7 +125,7 @@ public final class DynamicQuerySqlGenerator {
     }
 
     private String findColumnName(String fieldName) {
-        for (FieldMetadata field : dtoMetadata.getScalarFields()) {
+        for (FieldMetadata field : entityMetadata.getScalarFields()) {
             if (field.getFieldName().equalsIgnoreCase(fieldName)) {
                 return field.getColumnName();
             }
@@ -134,11 +134,11 @@ public final class DynamicQuerySqlGenerator {
     }
 
     private String getFullTableName() {
-        if (dtoMetadata.getSchema() != null) {
-            return dialect.quoteIdentifier(dtoMetadata.getSchema()) + "." +
-                   dialect.quoteIdentifier(dtoMetadata.getTableName());
+        if (entityMetadata.getSchema() != null) {
+            return dialect.quoteIdentifier(entityMetadata.getSchema()) + "." +
+                   dialect.quoteIdentifier(entityMetadata.getTableName());
         } else {
-            return dialect.quoteIdentifier(dtoMetadata.getTableName());
+            return dialect.quoteIdentifier(entityMetadata.getTableName());
         }
     }
 }

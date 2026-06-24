@@ -3,7 +3,7 @@ package fr.traqueur.victor.dialect.postgresql;
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.core.AbstractTestRunner;
-import fr.traqueur.victor.dto.UserDto;
+import fr.traqueur.victor.entity.UserEntity;
 import fr.traqueur.victor.repository.UserRepository;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -52,17 +52,17 @@ class PostgreSQLTest extends AbstractTestRunner {
 
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         try {
             UserRepository repo = victor.createRepository(UserRepository.class);
 
-            UserDto user1 = repo.save(new UserDto(
+            UserEntity user1 = repo.save(new UserEntity(
                     null, "serial1_" + System.nanoTime(),
                     "s1@test.com", 25, true, "S1"));
 
-            UserDto user2 = repo.save(new UserDto(
+            UserEntity user2 = repo.save(new UserEntity(
                     null, "serial2_" + System.nanoTime(),
                     "s2@test.com", 25, true, "S2"));
 
@@ -80,17 +80,17 @@ class PostgreSQLTest extends AbstractTestRunner {
 
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         try {
             UserRepository repo = victor.createRepository(UserRepository.class);
 
-            UserDto saved = repo.save(new UserDto(
+            UserEntity saved = repo.save(new UserEntity(
                     null, "case_test_" + System.nanoTime(),
                     "case@test.com", 25, true, "Case"));
 
-            Optional<UserDto> found =
+            Optional<UserEntity> found =
                     repo.findByUsername(saved.username());
 
             assertTrue(found.isPresent());
@@ -107,19 +107,19 @@ class PostgreSQLTest extends AbstractTestRunner {
 
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         try {
             UserRepository repo = victor.createRepository(UserRepository.class);
 
-            UserDto user = repo.save(new UserDto(
+            UserEntity user = repo.save(new UserEntity(
                     null, "upsert_" + System.nanoTime(),
                     "orig@test.com", 25, true, "Original"));
 
             Long id = user.id();
 
-            UserDto updated = new UserDto(
+            UserEntity updated = new UserEntity(
                     id,
                     user.username(),
                     "updated@test.com",
@@ -129,7 +129,7 @@ class PostgreSQLTest extends AbstractTestRunner {
 
             repo.save(updated);
 
-            Optional<UserDto> found = repo.findById(id);
+            Optional<UserEntity> found = repo.findById(id);
 
             assertTrue(found.isPresent());
             assertEquals("updated@test.com", found.get().email());
@@ -146,13 +146,13 @@ class PostgreSQLTest extends AbstractTestRunner {
 
         Victor victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         try {
             UserRepository repo = victor.createRepository(UserRepository.class);
 
-            UserDto user = repo.save(new UserDto(
+            UserEntity user = repo.save(new UserEntity(
                     null, "returning_" + System.nanoTime(),
                     "ret@test.com", 25, true, "Returning"));
 

@@ -1,14 +1,14 @@
 package fr.traqueur.victor.repository;
 
-import fr.traqueur.victor.entities.Repository;
-import fr.traqueur.victor.dto.AuthorDto;
-import fr.traqueur.victor.entities.Author;
+import fr.traqueur.victor.entity.Repository;
+import fr.traqueur.victor.entity.AuthorEntity;
+import fr.traqueur.victor.model.Author;
 
 import java.util.List;
 
-public interface AuthorRepository extends Repository<AuthorDto, Author, Long> {
+public interface AuthorRepository extends Repository<AuthorEntity, Author, Long> {
 
-    List<AuthorDto> findByName(String name);
+    List<AuthorEntity> findByName(String name);
 
-    List<AuthorDto> findByCountry(String country);
+    List<AuthorEntity> findByCountry(String country);
 }

@@ -3,7 +3,7 @@ package fr.traqueur.victor.dialect.h2;
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.core.AbstractTestRunner;
-import fr.traqueur.victor.dto.UserDto;
+import fr.traqueur.victor.entity.UserEntity;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,14 +36,14 @@ class H2Test extends AbstractTestRunner {
 
         var victor = configureVictor()
                 .autoMigrate()
-                .dtos(UserDto.class)
+                .entities(UserEntity.class)
                 .build();
 
         var repo = victor.createRepository(
                 fr.traqueur.victor.repository.UserRepository.class);
 
-        UserDto saved = repo.save(
-                new UserDto(null,
+        UserEntity saved = repo.save(
+                new UserEntity(null,
                         "mysql_compat_" + System.nanoTime(),
                         "test@test.com",
                         25,

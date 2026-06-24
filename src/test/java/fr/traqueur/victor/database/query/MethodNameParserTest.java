@@ -1,6 +1,6 @@
 package fr.traqueur.victor.database.query;
 
-import fr.traqueur.victor.entities.Query;
+import fr.traqueur.victor.entity.Query;
 import fr.traqueur.victor.exceptions.VictorException;
 import org.junit.jupiter.api.Test;
 
