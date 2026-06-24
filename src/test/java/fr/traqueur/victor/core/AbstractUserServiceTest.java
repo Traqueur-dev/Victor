@@ -8,6 +8,9 @@ import fr.traqueur.victor.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.util.List;
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public abstract class AbstractUserServiceTest {
@@ -118,5 +121,56 @@ public abstract class AbstractUserServiceTest {
         var found = repo.findByUsername(saved.getUsername());
 
         assertTrue(found.isPresent());
+    }
+
+    // =============================
+    // DELEGATION OF CUSTOM METHODS (service -> repository)
+    // =============================
+
+    @org.junit.jupiter.api.Test
+    void testServiceDelegatesDynamicFinder() {
+        User saved = userService.save(createUser("deleg_" + System.nanoTime()));
+
+        Optional<User> found = userService.findByUsername(saved.getUsername());
+
+        assertTrue(found.isPresent());
+        assertEquals(saved.getUsername(), found.get().getUsername());
+        // delegation must return a model, not the entity
+        assertInstanceOf(User.class, found.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void testServiceDelegatesListFinder() {
+        User young = createUser("young_" + System.nanoTime());
+        young.setAge(10);
+        userService.save(young);
+        User old = createUser("old_" + System.nanoTime());
+        old.setAge(80);
+        userService.save(old);
+
+        List<User> result = userService.findByAgeGreaterThan(50);
+
+        assertFalse(result.isEmpty());
+        assertTrue(result.stream().allMatch(u -> u.getAge() > 50));
+    }
+
+    @org.junit.jupiter.api.Test
+    void testServiceDelegatesQueryMethod() {
+        User saved = userService.save(createUser("query_" + System.nanoTime()));
+
+        Optional<User> found = userService.findByUsernameCustom(saved.getUsername());
+
+        assertTrue(found.isPresent());
+        assertEquals(saved.getUsername(), found.get().getUsername());
+    }
+
+    @org.junit.jupiter.api.Test
+    void testServiceDelegatesScalarQuery() {
+        userService.save(createUser("active1_" + System.nanoTime()));
+        userService.save(createUser("active2_" + System.nanoTime()));
+
+        long activeCount = userService.countByActive(true);
+
+        assertTrue(activeCount >= 2);
     }
 }

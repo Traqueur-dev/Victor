@@ -7,12 +7,14 @@ import fr.traqueur.victor.conversion.VictorConverter;
 import fr.traqueur.victor.entity.Service;
 import fr.traqueur.victor.reflections.TypeResolver;
 import fr.traqueur.victor.database.SqlExecutor;
-import fr.traqueur.victor.entity.dialect.Dialect; // ✅ CHANGEMENT: Ajout du Dialect
+import fr.traqueur.victor.entity.dialect.Dialect;
 import fr.traqueur.victor.exceptions.VictorException;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,13 +23,14 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
 
     private final Class<MODEL> modelClass;
     private final Class<E> entityClass;
+    private final Class<REPO> repositoryInterface;
     private final REPO repository;
 
     public ServiceProxyHandler(Class<? extends Service<MODEL,E,ID,REPO>> serviceInterface, SqlExecutor sqlExecutor, Dialect dialect) {
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
         this.modelClass = typeInfo.modelClass();
         this.entityClass = typeInfo.entityClass();
-        Class<REPO> repositoryInterface = typeInfo.repositoryClass();
+        this.repositoryInterface = typeInfo.repositoryClass();
         this.repository = RepositoryProxyHandler.createProxy(
                 repositoryInterface,
                 sqlExecutor,
@@ -37,9 +40,11 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
     @SuppressWarnings("unchecked")
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        String methodName = method.getName();
+        if (method.getDeclaringClass() == Object.class) {
+            return invokeObjectMethod(proxy, method, args);
+        }
 
-        return switch (methodName) {
+        return switch (method.getName()) {
             case "save" -> save((MODEL) args[0]);
             case "findById" -> findById((ID) args[0]);
             case "findAll" -> findAll();
@@ -48,12 +53,23 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
             case "delete" -> { delete((MODEL) args[0]); yield null; }
             case "exists" -> exists((ID) args[0]);
             case "count" -> count();
-            case "isValid" -> isValid((MODEL) args[0]);
-            case "validateAndSave" -> validateAndSave((MODEL) args[0]);
             case "saveAll" -> saveAll((List<MODEL>) args[0]);
             case "deleteAll" -> { deleteAll((List<ID>) args[0]); yield null; }
             case "repository" -> repository();
-            default -> throw new VictorException("Unsupported service method: " + methodName);
+            // Any other method: user-defined default stays on the interface,
+            // everything else is delegated to the matching repository method.
+            default -> method.isDefault()
+                    ? InvocationHandler.invokeDefault(proxy, method, args)
+                    : delegateToRepository(method, args);
+        };
+    }
+
+    private Object invokeObjectMethod(Object proxy, Method method, Object[] args) {
+        return switch (method.getName()) {
+            case "toString" -> "ServiceProxy[" + modelClass.getSimpleName() + "]";
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "equals" -> proxy == args[0];
+            default -> throw new VictorException("Unsupported Object method: " + method.getName());
         };
     }
 
@@ -159,13 +175,6 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
         return model != null && model.isValid();
     }
 
-    private MODEL validateAndSave(MODEL model) {
-        if (!isValid(model)) {
-            throw new VictorException("Invalid model: " + model);
-        }
-        return save(model);
-    }
-
     private List<MODEL> saveAll(List<MODEL> models) {
         return models.stream()
                 .map(this::save)
@@ -178,6 +187,97 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
 
     private REPO repository() {
         return repository;
+    }
+
+    // ===================== Generic delegation =====================
+    // Custom service methods (dynamic finders, @Query, ...) declared on the
+    // service interface are forwarded to the repository method of the same
+    // signature, converting MODEL arguments to entities and entity results
+    // back to models. This makes the service a true superset of the repository.
+
+    private Object delegateToRepository(Method serviceMethod, Object[] args) {
+        Method repositoryMethod = findRepositoryMethod(serviceMethod);
+        Object[] entityArgs = mapArgsToEntity(args);
+        Object result;
+        try {
+            result = repositoryMethod.invoke(repository, entityArgs);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            throw new VictorException("Failed to delegate service method '" + serviceMethod.getName()
+                    + "' to repository", cause != null ? cause : e);
+        } catch (IllegalAccessException e) {
+            throw new VictorException("Cannot access repository method: " + serviceMethod.getName(), e);
+        }
+        return mapResultToModel(result);
+    }
+
+    private Method findRepositoryMethod(Method serviceMethod) {
+        String name = serviceMethod.getName();
+        Class<?>[] serviceParams = serviceMethod.getParameterTypes();
+        Method nameMatch = null;
+        for (Method candidate : repositoryInterface.getMethods()) {
+            if (!candidate.getName().equals(name) || candidate.getParameterCount() != serviceParams.length) {
+                continue;
+            }
+            if (parametersCompatible(serviceParams, candidate.getParameterTypes())) {
+                return candidate;
+            }
+            nameMatch = candidate;
+        }
+        if (nameMatch != null) {
+            return nameMatch;
+        }
+        throw new VictorException("No repository method matches service method '" + name
+                + "'. Declare it on " + repositoryInterface.getSimpleName() + " as well.");
+    }
+
+    /** A MODEL parameter on the service maps to an entity parameter on the repository. */
+    private boolean parametersCompatible(Class<?>[] serviceParams, Class<?>[] repositoryParams) {
+        for (int i = 0; i < serviceParams.length; i++) {
+            Class<?> serviceParam = serviceParams[i];
+            Class<?> repositoryParam = repositoryParams[i];
+            if (repositoryParam.equals(serviceParam)) continue;
+            if (serviceParam.equals(modelClass) && repositoryParam.equals(entityClass)) continue;
+            if (repositoryParam.isAssignableFrom(serviceParam)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object[] mapArgsToEntity(Object[] args) {
+        if (args == null) return null;
+        Object[] mapped = new Object[args.length];
+        for (int i = 0; i < args.length; i++) {
+            Object arg = args[i];
+            mapped[i] = (arg != null && modelClass.isInstance(arg))
+                    ? VictorConverter.modelToEntity((MODEL) arg, entityClass)
+                    : arg;
+        }
+        return mapped;
+    }
+
+    private Object mapResultToModel(Object result) {
+        if (result == null) {
+            return null;
+        }
+        if (result instanceof Entity<?> entity) {
+            return entity.toModel();
+        }
+        if (result instanceof Optional<?> optional) {
+            return optional.map(value -> value instanceof Entity<?> entity ? entity.toModel() : value);
+        }
+        if (result instanceof List<?> list) {
+            return list.stream().map(this::entityToModelOrSelf).toList();
+        }
+        if (result instanceof Collection<?> collection) {
+            return collection.stream().map(this::entityToModelOrSelf).toList();
+        }
+        return result;
+    }
+
+    private Object entityToModelOrSelf(Object value) {
+        return value instanceof Entity<?> entity ? entity.toModel() : value;
     }
 
     @SuppressWarnings("unchecked")
