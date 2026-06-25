@@ -15,15 +15,22 @@ subprojects {
         // Access to test classes from root project (AbstractDialectTest, User, UserRepository, etc.)
         testImplementation(rootProject.sourceSets.test.get().output)
 
-        // Testcontainers for integration tests
-        testImplementation("org.testcontainers:junit-jupiter:1.19.0")
-        testImplementation("org.testcontainers:mysql:1.19.0")
-        testImplementation("org.testcontainers:postgresql:1.19.0")
+        // Testcontainers for integration tests (aligned with root: BOM 2.0.5 -> docker-java 3.7.x,
+        // required for Docker Engine API >= 1.40).
+        testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.5"))
+        testImplementation("org.testcontainers:testcontainers")
+        testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+        testImplementation("org.testcontainers:testcontainers-mysql")
+        testImplementation("org.testcontainers:testcontainers-postgresql")
     }
 
     java {
         withSourcesJar()
         withJavadocJar()
+    }
+
+    tasks.withType<Test>().configureEach {
+        dependsOn(rootProject.tasks.named("testClasses"))
     }
 
     tasks.jar {

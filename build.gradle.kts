@@ -76,15 +76,6 @@ allprojects {
     }
 }
 
-dependencies {
-    testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.5"))
-
-    testImplementation("org.testcontainers:testcontainers")
-    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
-    testImplementation("org.testcontainers:testcontainers-mysql")
-    testImplementation("org.testcontainers:testcontainers-postgresql")
-}
-
 
 
 tasks.register("generateVersionProperties") {
