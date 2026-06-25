@@ -53,4 +53,39 @@ public abstract class AbstractRelationshipTest extends AbstractVictorTest {
         assertTrue(loaded.courses().stream().anyMatch(c -> c.id().equals(course1.id())));
         assertTrue(loaded.courses().stream().anyMatch(c -> c.id().equals(course2.id())));
     }
+
+    @Test
+    void testCascadePersistManyToOne() {
+        // Save a book referencing a brand-new (unsaved) author: the author is
+        // cascade-persisted and the book FK is wired to its generated id.
+        BookEntity book = bookRepo.save(
+                new BookEntity(null, "Brave New World",
+                        new AuthorEntity(null, "Aldous Huxley", "UK", List.of())));
+
+        assertNotNull(book.id());
+        assertNotNull(book.author());
+        assertNotNull(book.author().id());
+
+        AuthorEntity savedAuthor = authorRepo.findById(book.author().id()).orElseThrow();
+        assertEquals("Aldous Huxley", savedAuthor.name());
+
+        BookEntity loaded = bookRepo.findById(book.id()).orElseThrow();
+        assertNotNull(loaded.author());
+        assertEquals(book.author().id(), loaded.author().id());
+    }
+
+    @Test
+    void testCascadePersistOneToMany() {
+        // Save an author with brand-new children: each book is cascade-persisted
+        // with its FK pointing back to the parent author.
+        AuthorEntity author = authorRepo.save(
+                new AuthorEntity(null, "Frank Herbert", "USA", List.of(
+                        new BookEntity(null, "Dune", null),
+                        new BookEntity(null, "Dune Messiah", null))));
+
+        assertNotNull(author.id());
+
+        AuthorEntity loaded = authorRepo.findById(author.id()).orElseThrow();
+        assertEquals(2, loaded.books().size());
+    }
 }

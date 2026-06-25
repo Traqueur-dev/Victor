@@ -1,5 +1,6 @@
 package fr.traqueur.victor.entity;
 
+import fr.traqueur.victor.annotations.CascadeType;
 import fr.traqueur.victor.annotations.Column;
 import fr.traqueur.victor.annotations.Id;
 import fr.traqueur.victor.annotations.OneToMany;
@@ -14,7 +15,7 @@ public record AuthorEntity(
     @Id Long id,
     @Column(nullable = false, length = 100) String name,
     @Column(length = 60) String country,
-    @OneToMany(mappedBy = "author") List<BookEntity> books
+    @OneToMany(mappedBy = "author", cascade = CascadeType.PERSIST) List<BookEntity> books
 ) implements Entity<Author> {
 
     @Override
