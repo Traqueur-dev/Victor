@@ -28,14 +28,15 @@ allprojects {
         }
 
         dependencies {
-            api("org.slf4j:slf4j-api:2.0.9")
-            api("com.zaxxer:HikariCP:5.1.0")
+            api("org.slf4j:slf4j-api:2.0.18")
+            api("com.zaxxer:HikariCP:7.1.0")
             api("org.reflections:reflections:0.10.2")
 
-            testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
-            testImplementation("org.assertj:assertj-core:3.24.2")
-            testImplementation("org.mockito:mockito-core:5.7.0")
-            testImplementation("org.mockito:mockito-junit-jupiter:5.7.0")
+            testImplementation("org.slf4j:slf4j-simple:2.0.18")
+            testImplementation("org.junit.jupiter:junit-jupiter:6.1.0")
+            testImplementation("org.assertj:assertj-core:3.27.7")
+            testImplementation("org.mockito:mockito-core:5.23.0")
+            testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
             testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         }
 
@@ -65,7 +66,7 @@ allprojects {
         }
 
         tasks.named("jacocoTestReport") {
-            (this as org.gradle.testing.jacoco.tasks.JacocoReport).apply {
+            (this as JacocoReport).apply {
                 reports {
                     xml.required.set(true)
                     html.required.set(true)
@@ -76,9 +77,12 @@ allprojects {
 }
 
 dependencies {
-    testImplementation("org.testcontainers:junit-jupiter:1.19.0")
-    testImplementation("org.testcontainers:mysql:1.19.0")
-    testImplementation("org.testcontainers:postgresql:1.19.0")
+    testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.5"))
+
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-mysql")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
 }
 
 

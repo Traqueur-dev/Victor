@@ -1,5 +1,6 @@
 package fr.traqueur.victor.dialect.h2;
 
+import com.github.dockerjava.api.DockerClient;
 import fr.traqueur.victor.Victor;
 import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.core.AbstractTestRunner;
@@ -7,6 +8,9 @@ import fr.traqueur.victor.entity.UserEntity;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.shaded.com.github.dockerjava.core.DefaultDockerClientConfig;
+import org.testcontainers.shaded.com.github.dockerjava.core.DockerClientImpl;
 
 import java.util.UUID;
 

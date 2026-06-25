@@ -3,6 +3,7 @@ package fr.traqueur.victor.core;
 import fr.traqueur.victor.entity.UserEntity;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,5 +80,40 @@ public abstract class AbstractCrudTest extends AbstractVictorTest {
         userRepository.save(createUser("all_b_" + System.nanoTime()));
 
         assertFalse(userRepository.findAll().isEmpty());
+    }
+
+    @Test
+    void testBatchInsertAssignsIdsAndPersists() {
+        long before = userRepository.count();
+
+        List<UserEntity> batch = List.of(
+                createUser("batch_a_" + System.nanoTime()),
+                createUser("batch_b_" + System.nanoTime()),
+                createUser("batch_c_" + System.nanoTime())
+        );
+
+        var saved = userRepository.saveAll(batch);
+
+        assertEquals(3, saved.size());
+        saved.forEach(u -> assertNotNull(u.id()));
+        assertEquals(before + 3, userRepository.count());
+    }
+
+    @Test
+    void testBatchInsertIsAtomicOnFailure() {
+        long before = userRepository.count();
+        String duplicated = "dup_" + System.nanoTime();
+
+        // Two rows share the same unique username -> the batch must fail and roll back entirely.
+        List<UserEntity> batch = List.of(
+                createUser("ok_" + System.nanoTime()),
+                createUser(duplicated),
+                createUser(duplicated)
+        );
+
+        assertThrows(Exception.class, () -> userRepository.saveAll(batch));
+
+        assertEquals(before, userRepository.count());
+        assertFalse(userRepository.findByUsername(duplicated).isPresent());
     }
 }

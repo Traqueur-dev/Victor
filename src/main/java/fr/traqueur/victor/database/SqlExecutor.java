@@ -143,6 +143,152 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
     }
 
     /**
+     * Executes a batch of statements (same SQL, many parameter sets) using
+     * JDBC addBatch/executeBatch on a single connection. When not already in a
+     * transaction, the whole batch is committed atomically.
+     */
+    public int[] executeBatch(String sql, List<Object[]> batchParams) {
+        if (batchParams == null || batchParams.isEmpty()) {
+            return new int[0];
+        }
+        if (connectionManager.getConfiguration().showSql()) {
+            VictorLogger.debug("SQL (BATCH x{}): {}", batchParams.size(), sql);
+        }
+
+        Connection conn = connectionManager.getConnection();
+        boolean inTransaction = TransactionContext.getCurrentConnection() == conn;
+        boolean previousAutoCommit = true;
+        try {
+            if (!inTransaction) {
+                previousAutoCommit = conn.getAutoCommit();
+                conn.setAutoCommit(false);
+            }
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                for (Object[] params : batchParams) {
+                    setParameters(stmt, params);
+                    stmt.addBatch();
+                }
+                int[] result = stmt.executeBatch();
+                if (!inTransaction) {
+                    conn.commit();
+                }
+                return result;
+            }
+        } catch (SQLException e) {
+            if (!inTransaction) {
+                rollbackQuietly(conn);
+            }
+            throw new VictorException("Failed to execute batch: " + sql, e);
+        } finally {
+            if (!inTransaction) {
+                restoreAutoCommitQuietly(conn, previousAutoCommit);
+            }
+            closeConnectionIfNotTransactional(conn);
+        }
+    }
+
+    /**
+     * Batch insert returning the generated keys in insertion order. Falls back
+     * to per-row inserts for dialects without standard generated-key support
+     * (e.g. SQLite, using last_insert_rowid()). Atomic when not already in a
+     * transaction.
+     */
+    public <T> List<T> executeBatchInsertWithGeneratedKeys(String sql, List<Object[]> batchParams, Class<T> idType) {
+        if (batchParams == null || batchParams.isEmpty()) {
+            return List.of();
+        }
+        if (connectionManager.getConfiguration().showSql()) {
+            VictorLogger.debug("SQL (BATCH INSERT x{}): {}", batchParams.size(), sql);
+        }
+
+        Connection conn = connectionManager.getConnection();
+        boolean inTransaction = TransactionContext.getCurrentConnection() == conn;
+        boolean previousAutoCommit = true;
+        try {
+            if (!inTransaction) {
+                previousAutoCommit = conn.getAutoCommit();
+                conn.setAutoCommit(false);
+            }
+
+            List<T> ids = dialect.supportsStandardGeneratedKeys()
+                    ? batchInsertStandard(conn, sql, batchParams, idType)
+                    : batchInsertWithLastId(conn, sql, batchParams, idType);
+
+            if (!inTransaction) {
+                conn.commit();
+            }
+            return ids;
+        } catch (SQLException e) {
+            if (!inTransaction) {
+                rollbackQuietly(conn);
+            }
+            throw new VictorException("Failed to execute batch insert: " + sql, e);
+        } finally {
+            if (!inTransaction) {
+                restoreAutoCommitQuietly(conn, previousAutoCommit);
+            }
+            closeConnectionIfNotTransactional(conn);
+        }
+    }
+
+    private <T> List<T> batchInsertStandard(Connection conn, String sql, List<Object[]> batchParams, Class<T> idType)
+            throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            for (Object[] params : batchParams) {
+                setParameters(stmt, params);
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+            List<T> ids = new ArrayList<>(batchParams.size());
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                while (rs.next()) {
+                    ids.add(rs.getObject(1, idType));
+                }
+            }
+            return ids;
+        }
+    }
+
+    private <T> List<T> batchInsertWithLastId(Connection conn, String sql, List<Object[]> batchParams, Class<T> idType)
+            throws SQLException {
+        String lastIdSql = dialect.getLastInsertIdSql();
+        List<T> ids = new ArrayList<>(batchParams.size());
+        for (Object[] params : batchParams) {
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                setParameters(stmt, params);
+                if (stmt.executeUpdate() == 0) {
+                    throw new VictorException("Batch insert failed, no rows affected");
+                }
+            }
+            try (PreparedStatement idStmt = conn.prepareStatement(lastIdSql);
+                 ResultSet rs = idStmt.executeQuery()) {
+                if (rs.next()) {
+                    ids.add(rs.getObject(1, idType));
+                } else {
+                    throw new VictorException("Batch insert failed, no generated key returned");
+                }
+            }
+        }
+        return ids;
+    }
+
+    private void rollbackQuietly(Connection conn) {
+        try {
+            conn.rollback();
+        } catch (SQLException e) {
+            VictorLogger.warn("Failed to rollback batch", e);
+        }
+    }
+
+    private void restoreAutoCommitQuietly(Connection conn, boolean autoCommit) {
+        try {
+            conn.setAutoCommit(autoCommit);
+        } catch (SQLException e) {
+            VictorLogger.warn("Failed to restore auto-commit", e);
+        }
+    }
+
+    /**
      * Execute UPDATE/DELETE with parameters - Version RepositoryProxyHandler
      */
     public int executeUpdate(String sql, Object[] params) {
