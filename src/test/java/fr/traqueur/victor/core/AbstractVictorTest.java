@@ -6,11 +6,13 @@ import fr.traqueur.victor.entity.BookEntity;
 import fr.traqueur.victor.entity.CourseEntity;
 import fr.traqueur.victor.entity.StudentEntity;
 import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.entity.VehicleEntity;
 import fr.traqueur.victor.repository.AuthorRepository;
 import fr.traqueur.victor.repository.BookRepository;
 import fr.traqueur.victor.repository.CourseRepository;
 import fr.traqueur.victor.repository.StudentRepository;
 import fr.traqueur.victor.repository.UserRepository;
+import fr.traqueur.victor.repository.VehicleRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -23,6 +25,7 @@ public abstract class AbstractVictorTest {
     protected BookRepository bookRepo;
     protected StudentRepository studentRepo;
     protected CourseRepository courseRepo;
+    protected VehicleRepository vehicleRepo;
 
     protected abstract VictorBuilder configureVictor();
 
@@ -36,7 +39,8 @@ public abstract class AbstractVictorTest {
                         AuthorEntity.class,
                         BookEntity.class,
                         StudentEntity.class,
-                        CourseEntity.class
+                        CourseEntity.class,
+                        VehicleEntity.class
                 );
 
         victor = builder.build();
@@ -46,6 +50,7 @@ public abstract class AbstractVictorTest {
         bookRepo = victor.createRepository(BookRepository.class);
         studentRepo = victor.createRepository(StudentRepository.class);
         courseRepo = victor.createRepository(CourseRepository.class);
+        vehicleRepo = victor.createRepository(VehicleRepository.class);
     }
 
     @AfterEach

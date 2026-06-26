@@ -56,6 +56,18 @@ public abstract class AbstractCrudTest extends AbstractVictorTest {
     }
 
     @Test
+    void testInheritedColumnIsPersistedAndMapped() {
+        var saved = vehicleRepo.save(
+                new fr.traqueur.victor.entity.VehicleEntity(null, "Peugeot", "alice"));
+        assertNotNull(saved.getId());
+
+        var found = vehicleRepo.findById(saved.getId()).orElseThrow();
+        assertEquals("Peugeot", found.getBrand());
+        // created_by is declared on the AuditableEntity superclass.
+        assertEquals("alice", found.getCreatedBy());
+    }
+
+    @Test
     void testFindByIdNotFound() {
         // Un ID très grand qui n'existe probablement pas
         Optional<UserEntity> result = userRepository.findById(Long.MAX_VALUE);

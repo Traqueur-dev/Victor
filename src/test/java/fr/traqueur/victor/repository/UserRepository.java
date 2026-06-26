@@ -43,6 +43,16 @@ public interface UserRepository extends Repository<UserEntity, User, Long> {
     // Test 11: Combinaison complexe
     List<UserEntity> findByActiveAndAgeGreaterThanOrderByNameAsc(boolean active, int age);
 
+    // Dérivé: IN avec collection
+    List<UserEntity> findByIdIn(List<Long> ids);
+
+    // Dérivés countBy / existsBy / deleteBy (sans @Query)
+    boolean existsByUsername(String username);
+
+    long countByAgeGreaterThan(int age);
+
+    int deleteByUsername(String username);
+
     @Query("SELECT * FROM users WHERE age > ? AND active = ?")
     List<UserEntity> findActiveUsersOlderThan(int age, boolean active);
 

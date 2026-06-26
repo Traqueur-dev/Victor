@@ -11,6 +11,7 @@ import fr.traqueur.victor.exceptions.VictorConversionException;
 import fr.traqueur.victor.registries.EntityMetadataRegistry;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -95,31 +96,40 @@ public final class EntityMapper {
         Object currentId = readCurrentId(rs, metadata);
         Dialect dialect = sqlExecutor.dialect();
 
-        for (var field : entityClass.getDeclaredFields()) {
-            field.setAccessible(true);
-            String fieldName = field.getName();
-
-            RelationshipMetadata rel = metadata.findRelationshipByFieldName(fieldName);
-            if (rel != null) {
-                if (rel.getFetchType() == FetchType.EAGER
-                        && !RelationshipLoadingContext.isAlreadyLoading(rel.getTargetEntityClass())) {
-                    field.set(entity, loadRelationship(rel, rs, currentId, sqlExecutor, dialect));
+        // Walk the class hierarchy so inherited fields are mapped too (mirrors
+        // EntityMetadata.analyzeClass which also climbs the superclass chain).
+        Class<?> current = entityClass;
+        while (current != null && current != Object.class) {
+            for (var field : current.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || Modifier.isTransient(field.getModifiers())) {
+                    continue;
                 }
-                continue;
-            }
+                field.setAccessible(true);
+                String fieldName = field.getName();
 
-            FieldMetadata fieldMetadata = findFieldByName(metadata, fieldName);
-            if (fieldMetadata != null) {
-                Object value = sqlExecutor.getFieldValue(rs, fieldMetadata);
-                field.set(entity, convertValue(value, field.getType()));
-            } else {
-                try {
-                    Object value = rs.getObject(fieldName);
+                RelationshipMetadata rel = metadata.findRelationshipByFieldName(fieldName);
+                if (rel != null) {
+                    if (rel.getFetchType() == FetchType.EAGER
+                            && !RelationshipLoadingContext.isAlreadyLoading(rel.getTargetEntityClass())) {
+                        field.set(entity, loadRelationship(rel, rs, currentId, sqlExecutor, dialect));
+                    }
+                    continue;
+                }
+
+                FieldMetadata fieldMetadata = findFieldByName(metadata, fieldName);
+                if (fieldMetadata != null) {
+                    Object value = sqlExecutor.getFieldValue(rs, fieldMetadata);
                     field.set(entity, convertValue(value, field.getType()));
-                } catch (SQLException e) {
-                    // Column doesn't exist in result set, skip
+                } else {
+                    try {
+                        Object value = rs.getObject(fieldName);
+                        field.set(entity, convertValue(value, field.getType()));
+                    } catch (SQLException e) {
+                        // Column doesn't exist in result set, skip
+                    }
                 }
             }
+            current = current.getSuperclass();
         }
 
         return entity;

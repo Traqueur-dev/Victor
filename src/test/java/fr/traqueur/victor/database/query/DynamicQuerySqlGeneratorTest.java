@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,7 +68,12 @@ class DynamicQuerySqlGeneratorTest {
         List<Object> findByUsernameNotLike(String pattern);
         List<Object> findByIdIn(List<Long> ids);
         List<Object> findByIdNotIn(List<Long> ids);
+        long countByActive(boolean active);
+        boolean existsByUsername(String username);
+        int deleteByAgeLessThan(int age);
     }
+
+    private static final Set<String> FIELDS = Set.of("id", "username", "age", "active", "email", "name");
 
     @Mock
     private Dialect dialect;
@@ -141,6 +147,66 @@ class DynamicQuerySqlGeneratorTest {
         var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
         var sql = gen.generateSql(MethodNameParser.parse(method("findByIdNotIn", List.class)));
         assertEquals("SELECT * FROM `users` WHERE `id` NOT IN (?)", sql);
+    }
+
+    // ─── IN/NotIn : expansion des placeholders (args-aware) ─────────────────────
+
+    @Test
+    void testInExpansionMultiple() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("findByIdIn", List.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{List.of(1L, 2L, 3L)});
+        assertEquals("SELECT * FROM `users` WHERE `id` IN (?, ?, ?)", sql);
+    }
+
+    @Test
+    void testInExpansionSingle() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("findByIdIn", List.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{List.of(42L)});
+        assertEquals("SELECT * FROM `users` WHERE `id` IN (?)", sql);
+    }
+
+    @Test
+    void testInEmptyCollection() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("findByIdIn", List.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{List.of()});
+        assertEquals("SELECT * FROM `users` WHERE 1=0", sql);
+    }
+
+    @Test
+    void testNotInEmptyCollection() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("findByIdNotIn", List.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{List.of()});
+        assertEquals("SELECT * FROM `users` WHERE 1=1", sql);
+    }
+
+    // ─── COUNT / EXISTS / DELETE dérivés ────────────────────────────────────────
+
+    @Test
+    void testCountQuery() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("countByActive", boolean.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{true});
+        assertEquals("SELECT COUNT(*) FROM `users` WHERE `active` = ?", sql);
+    }
+
+    @Test
+    void testExistsQuery() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("existsByUsername", String.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{"bob"});
+        assertEquals("SELECT 1 FROM `users` WHERE `username` = ? LIMIT 1", sql);
+    }
+
+    @Test
+    void testDeleteQuery() throws Exception {
+        var gen = new DynamicQuerySqlGenerator(entityMetadata, dialect, false);
+        var parsed = MethodNameParser.parse(method("deleteByAgeLessThan", int.class), FIELDS);
+        var sql = gen.generateSql(parsed, new Object[]{18});
+        assertEquals("DELETE FROM `users` WHERE `age` < ?", sql);
     }
 
     // ─── Opérateurs Null ────────────────────────────────────────────────────────
