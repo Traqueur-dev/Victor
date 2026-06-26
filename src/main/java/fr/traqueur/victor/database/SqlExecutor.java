@@ -397,8 +397,13 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
     /**
      * Converts Java objects to JDBC-compatible types.
-     * Some types like UUID need to be converted to String to avoid
-     * binary serialization issues with certain JDBC drivers.
+     *
+     * <p>UUID is bound as String to avoid binary serialization issues. java.time
+     * types are bound as their java.sql counterparts (Timestamp/Date/Time) so the
+     * driver formats them itself — this notably keeps SQLite's TEXT storage and
+     * its {@code getTimestamp} parser in the same {@code yyyy-MM-dd HH:mm:ss}
+     * format (binding a raw LocalDateTime would store an ISO {@code T}-separated
+     * string that SQLite then fails to parse on read).</p>
      */
     private Object convertForJdbc(Object value) {
         if (value == null) {
@@ -406,6 +411,15 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         }
         if (value instanceof UUID uuid) {
             return uuid.toString();
+        }
+        if (value instanceof LocalDateTime ldt) {
+            return Timestamp.valueOf(ldt);
+        }
+        if (value instanceof LocalDate ld) {
+            return Date.valueOf(ld);
+        }
+        if (value instanceof LocalTime lt) {
+            return Time.valueOf(lt);
         }
         return value;
     }

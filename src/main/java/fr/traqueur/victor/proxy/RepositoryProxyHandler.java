@@ -590,13 +590,14 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
 
     /**
      * Gets the value for a field, handling synthetic FK fields by extracting
-     * the related entity's ID from the relationship field.
+     * the related entity's ID from the relationship field. Embedded sub-fields are
+     * read through {@link FieldMetadata#getValue} (parent accessor then sub accessor).
      */
     private Object getFieldValueForPersist(Object entity, EntityMetadata meta, FieldMetadata field) {
         if (field.isSyntheticFk()) {
             return extractForeignKeyValue(entity, meta, field.getColumnName());
         }
-        return readField(entity, field.getFieldName());
+        return field.getValue(entity);
     }
 
     /**
