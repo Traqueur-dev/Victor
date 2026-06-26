@@ -22,8 +22,9 @@ public final class EntityMetadata {
     private final String tableName;
     private final String schema;
     private final FieldMetadata idField;
-    private final List<FieldMetadata> scalarFields;         // @Id + @Column fields (no relations)
+    private final List<FieldMetadata> scalarFields;         // @Id + @Column fields + flattened @Embedded columns
     private final List<RelationshipMetadata> relationships;
+    private final List<EmbeddedMetadata> embeddeds;         // @Embedded components, for read-time reconstruction
     private final Map<String, FieldMetadata> fieldByColumn; // keyed by column name
     private final Map<String, FieldMetadata> fieldByName;   // keyed by Java field/component name
 
@@ -46,8 +47,9 @@ public final class EntityMetadata {
 
         List<FieldMetadata> scalars = new ArrayList<>();
         List<RelationshipMetadata> rels = new ArrayList<>();
+        List<EmbeddedMetadata> embeds = new ArrayList<>();
 
-        analyzeRecord(entityClass, scalars, rels);
+        analyzeRecord(entityClass, scalars, rels, embeds);
 
         FieldMetadata id = scalars.stream().filter(FieldMetadata::isId).findFirst().orElse(null);
         if (id == null) {
@@ -57,11 +59,17 @@ public final class EntityMetadata {
         this.idField = id;
         this.scalarFields = Collections.unmodifiableList(scalars);
         this.relationships = Collections.unmodifiableList(rels);
+        this.embeddeds = Collections.unmodifiableList(embeds);
 
+        // Keyed by column name (embedded columns are prefixed, so unique); merge defensively.
         this.fieldByColumn = scalars.stream()
-            .collect(Collectors.toMap(FieldMetadata::getColumnName, f -> f));
+            .collect(Collectors.toMap(FieldMetadata::getColumnName, f -> f, (a, b) -> a));
+        // Keyed by Java component name. Embedded sub-fields are excluded: their simple
+        // names (e.g. "amount") can repeat when the same type is embedded twice, and they
+        // are addressed through EmbeddedMetadata rather than this lookup map.
         this.fieldByName = scalars.stream()
-            .collect(Collectors.toMap(FieldMetadata::getFieldName, f -> f));
+            .filter(f -> !f.isEmbeddedSubField())
+            .collect(Collectors.toMap(FieldMetadata::getFieldName, f -> f, (a, b) -> a));
     }
 
     public static EntityMetadata of(Class<?> entityClass) {
@@ -72,12 +80,22 @@ public final class EntityMetadata {
     // Record analysis
     // -------------------------------------------------------------------------
 
-    private void analyzeRecord(Class<?> clazz, List<FieldMetadata> scalars, List<RelationshipMetadata> rels) {
+    private void analyzeRecord(Class<?> clazz, List<FieldMetadata> scalars,
+                               List<RelationshipMetadata> rels, List<EmbeddedMetadata> embeds) {
         int idCount = 0;
         for (RecordComponent component : clazz.getRecordComponents()) {
             if (component.getAnnotation(Ignore.class) != null) continue;
 
-            // Check relationship annotations first
+            // @Embedded: flatten the nested record's components into columns.
+            Embedded embeddedAnn = component.getAnnotation(Embedded.class);
+            if (embeddedAnn != null) {
+                EmbeddedMetadata embedded = EmbeddedMetadata.of(component, embeddedAnn.prefix());
+                embeds.add(embedded);
+                scalars.addAll(embedded.getSubFields());
+                continue;
+            }
+
+            // Check relationship annotations next
             RelationshipMetadata rel = RelationshipMetadata.ofRecordComponent(component);
             if (rel != null) {
                 rels.add(rel);
@@ -188,6 +206,15 @@ public final class EntityMetadata {
     public RelationshipMetadata findRelationshipByFieldName(String fieldName) {
         return relationships.stream()
             .filter(r -> r.getFieldName().equals(fieldName))
+            .findFirst()
+            .orElse(null);
+    }
+
+    public List<EmbeddedMetadata> getEmbeddeds() { return embeddeds; }
+
+    public EmbeddedMetadata findEmbeddedByFieldName(String fieldName) {
+        return embeddeds.stream()
+            .filter(e -> e.getFieldName().equals(fieldName))
             .findFirst()
             .orElse(null);
     }

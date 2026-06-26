@@ -4,6 +4,7 @@ import fr.traqueur.victor.annotations.FetchType;
 import fr.traqueur.victor.entity.Entity;
 import fr.traqueur.victor.entity.Model;
 import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.metadata.EmbeddedMetadata;
 import fr.traqueur.victor.entity.metadata.EntityMetadata;
 import fr.traqueur.victor.entity.metadata.FieldMetadata;
 import fr.traqueur.victor.entity.metadata.RelationshipMetadata;
@@ -63,6 +64,12 @@ public final class EntityMapper {
                 continue;
             }
 
+            EmbeddedMetadata embedded = metadata.findEmbeddedByFieldName(componentName);
+            if (embedded != null) {
+                args[i] = buildEmbedded(embedded, rs, sqlExecutor);
+                continue;
+            }
+
             FieldMetadata fieldMetadata = findFieldByName(metadata, componentName);
             if (fieldMetadata != null) {
                 Object value = sqlExecutor.getFieldValue(rs, fieldMetadata);
@@ -80,6 +87,26 @@ public final class EntityMapper {
         Constructor<E> constructor = recordClass.getDeclaredConstructor(
                 Arrays.stream(components).map(RecordComponent::getType).toArray(Class[]::new)
         );
+        return constructor.newInstance(args);
+    }
+
+    /**
+     * Rebuilds an embedded record from its flattened columns. Always instantiated
+     * (a fully-null embedded becomes a record of null components).
+     */
+    private static Object buildEmbedded(EmbeddedMetadata embedded, ResultSet rs, SqlExecutor sqlExecutor)
+            throws Exception {
+        var subFields = embedded.getSubFields();
+        RecordComponent[] subComponents = embedded.getEmbeddedType().getRecordComponents();
+        Object[] args = new Object[subComponents.length];
+        for (int i = 0; i < subComponents.length; i++) {
+            Object value = sqlExecutor.getFieldValue(rs, subFields.get(i));
+            args[i] = convertValue(value, subComponents[i].getType());
+        }
+        Constructor<?> constructor = embedded.getEmbeddedType().getDeclaredConstructor(
+                Arrays.stream(subComponents).map(RecordComponent::getType).toArray(Class[]::new)
+        );
+        constructor.setAccessible(true);
         return constructor.newInstance(args);
     }
 

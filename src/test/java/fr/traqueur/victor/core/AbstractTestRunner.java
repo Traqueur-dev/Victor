@@ -32,6 +32,14 @@ public abstract class AbstractTestRunner {
     }
 
     @Nested
+    class Embedded extends AbstractEmbeddedTest {
+        @Override
+        protected VictorBuilder configureVictor() {
+            return AbstractTestRunner.this.configureVictor();
+        }
+    }
+
+    @Nested
     class Migration extends AbstractMigrationTest {
         @Override
         protected VictorBuilder configureVictor() {

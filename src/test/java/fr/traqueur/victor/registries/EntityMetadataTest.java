@@ -56,6 +56,33 @@ class EntityMetadataTest {
         @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
     }
 
+    // --- @Embedded fixtures ---
+
+    record EmbAudit(java.time.LocalDateTime createdAt, @Column(length = 80) String createdBy) {}
+
+    @Table(table = "emb_invoices")
+    record EmbeddedEntity(
+        @Id Long id,
+        @Column String number,
+        @Embedded EmbAudit audit
+    ) implements Entity<InvalidUserModel> {
+        @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
+    }
+
+    static class NotARecord { }
+
+    @Table(table = "bad_emb")
+    record NonRecordEmbedded(@Id Long id, @Embedded NotARecord bad) implements Entity<InvalidUserModel> {
+        @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
+    }
+
+    record EmbWithId(@Id Long innerId, String label) {}
+
+    @Table(table = "bad_emb_id")
+    record EmbeddedWithIdEntity(@Id Long id, @Embedded EmbWithId e) implements Entity<InvalidUserModel> {
+        @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
+    }
+
     @Test
     void testEntityMetadataCreation() {
         var metadata = EntityMetadata.of(TestUserEntity.class);
@@ -129,6 +156,36 @@ class EntityMetadataTest {
         // Entities must be Java records; a class-based entity must be rejected.
         assertThrows(VictorConfigurationException.class, () ->
             EntityMetadata.of(ClassBasedEntity.class)
+        );
+    }
+
+    @Test
+    void testEmbeddedFlattensColumns() {
+        var metadata = EntityMetadata.of(EmbeddedEntity.class);
+
+        var columns = metadata.getFields().stream()
+                .map(f -> f.getColumnName())
+                .toList();
+        assertTrue(columns.contains("created_at"));
+        assertTrue(columns.contains("created_by"));
+        assertTrue(columns.contains("number"));
+
+        assertEquals(1, metadata.getEmbeddeds().size());
+        assertNotNull(metadata.findEmbeddedByFieldName("audit"));
+        assertEquals(2, metadata.findEmbeddedByFieldName("audit").getSubFields().size());
+    }
+
+    @Test
+    void testEmbeddedNonRecordTypeIsRejected() {
+        assertThrows(VictorConfigurationException.class, () ->
+            EntityMetadata.of(NonRecordEmbedded.class)
+        );
+    }
+
+    @Test
+    void testEmbeddedWithIdIsRejected() {
+        assertThrows(VictorConfigurationException.class, () ->
+            EntityMetadata.of(EmbeddedWithIdEntity.class)
         );
     }
 
