@@ -5,15 +5,21 @@ import fr.traqueur.victor.entity.InvoiceEntity;
 import fr.traqueur.victor.entity.Money;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public abstract class AbstractEmbeddedTest extends AbstractVictorTest {
+
+    // Fixed, sub-second-free instant so the round-trip is exact on every dialect
+    // (SQLite stores millisecond-precision TEXT timestamps).
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2024, 1, 15, 10, 30, 0);
 
     @Test
     void testEmbeddedPersistedAndMapped() {
         InvoiceEntity saved = invoiceRepo.save(new InvoiceEntity(
                 null, "INV-" + System.nanoTime(),
-                new Audit("alice", 1),
+                new Audit(CREATED_AT, "alice"),
                 new Money(100, "EUR"),
                 new Money(120, "USD")));
 
@@ -21,17 +27,17 @@ public abstract class AbstractEmbeddedTest extends AbstractVictorTest {
 
         InvoiceEntity found = invoiceRepo.findById(saved.id()).orElseThrow();
 
-        // Embedded never null on read.
+        // Embedded never null on read; LocalDateTime round-trips on every dialect.
         assertNotNull(found.audit());
         assertEquals("alice", found.audit().createdBy());
-        assertEquals(1, found.audit().revision());
+        assertEquals(CREATED_AT, found.audit().createdAt());
     }
 
     @Test
     void testEmbeddedPrefixDisambiguatesSameType() {
         InvoiceEntity saved = invoiceRepo.save(new InvoiceEntity(
                 null, "INV-" + System.nanoTime(),
-                new Audit("bob", 2),
+                new Audit(CREATED_AT, "bob"),
                 new Money(100, "EUR"),
                 new Money(120, "USD")));
 
@@ -56,7 +62,7 @@ public abstract class AbstractEmbeddedTest extends AbstractVictorTest {
 
         // Embedded is instantiated even when all its columns are null.
         assertNotNull(found.audit());
+        assertNull(found.audit().createdAt());
         assertNull(found.audit().createdBy());
-        assertNull(found.audit().revision());
     }
 }

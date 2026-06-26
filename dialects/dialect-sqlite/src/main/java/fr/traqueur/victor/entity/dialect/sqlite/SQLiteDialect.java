@@ -61,7 +61,13 @@ public class SQLiteDialect implements Dialect {
 
     @Override
     public Properties getDefaultConnectionProperties() {
-        return new Properties();
+        // Store date/time values as TEXT in a fixed, parseable format so writes and
+        // reads agree. Without this, the xerial driver stores java.sql.Timestamp as
+        // epoch millis but reads via date_string_format, throwing on getTimestamp.
+        Properties props = new Properties();
+        props.setProperty("date_class", "text");
+        props.setProperty("date_string_format", "yyyy-MM-dd HH:mm:ss.SSS");
+        return props;
     }
 
     @Override
