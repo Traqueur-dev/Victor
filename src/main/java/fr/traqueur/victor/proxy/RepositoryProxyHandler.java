@@ -21,6 +21,7 @@ import fr.traqueur.victor.database.EntityMapper;
 import fr.traqueur.victor.exceptions.VictorException;
 import fr.traqueur.victor.utils.VictorLogger;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -28,6 +29,7 @@ import java.util.*;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model<ID>, ID>
         implements InvocationHandler {
@@ -48,6 +50,7 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
     private final DynamicQuerySqlGenerator sqlGenerator;
     private final Dialect dialect;
     private final TransactionManager transactionManager;
+    private final Set<String> knownFieldNames;
 
     public RepositoryProxyHandler(Class<? extends Repository<E, MODEL, ID>> repositoryInterface,
                                   SqlExecutor sqlExecutor, Dialect dialect) {
@@ -59,6 +62,17 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
         this.dialect = dialect;
         this.sqlGenerator = new DynamicQuerySqlGenerator(entityMetadata, dialect, sqlExecutor.isShowSql());
         this.transactionManager = new TransactionManager(sqlExecutor.connectionManager());
+        this.knownFieldNames = entityMetadata.getScalarFields().stream()
+                .map(FieldMetadata::getFieldName)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /** Whether a method name is a derived query (findBy/countBy/existsBy/deleteBy). */
+    private static boolean isDerivedQueryMethod(String methodName) {
+        return methodName.startsWith("findBy")
+                || methodName.startsWith("countBy")
+                || methodName.startsWith("existsBy")
+                || methodName.startsWith("deleteBy");
     }
 
     /** Runs the action in a transaction, reusing the current one if already inside a transaction. */
@@ -94,8 +108,8 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
             }
             case "query" -> query();
             default -> {
-                if (methodName.startsWith("findBy")) {
-                    yield handleDynamicFinderMethod(method, args);
+                if (isDerivedQueryMethod(methodName)) {
+                    yield handleDerivedQuery(method, args);
                 }
                 throw new VictorException("Unsupported repository method: " + methodName);
             }
@@ -381,32 +395,74 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
         return new QueryProxyHandler<>(entityClass, entityMetadata, sqlExecutor, dialect).createProxy();
     }
 
-    private Object handleDynamicFinderMethod(Method method, Object[] args) {
+    private Object handleDerivedQuery(Method method, Object[] args) {
         try {
-            MethodNameParser.ParsedQuery parsedQuery = MethodNameParser.parse(method);
-            String sql = sqlGenerator.generateSql(parsedQuery);
+            MethodNameParser.ParsedQuery parsedQuery = MethodNameParser.parse(method, knownFieldNames);
+            String sql = sqlGenerator.generateSql(parsedQuery, args);
             Object[] preparedArgs = prepareArguments(parsedQuery, args);
-            SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
 
-            Class<?> returnType = method.getReturnType();
-            if (returnType == Optional.class) {
-                return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper));
-            } else if (List.class.isAssignableFrom(returnType)) {
-                return sqlExecutor.executeQuery(sql, preparedArgs, mapper);
-            } else if (returnType.isAssignableFrom(entityClass)) {
-                return sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper);
-            } else {
-                throw new VictorException("Unsupported return type for dynamic query: " + returnType);
-            }
+            return switch (parsedQuery.kind()) {
+                case FIND -> executeDerivedFind(method, sql, preparedArgs);
+                case COUNT -> coerceCount(method.getReturnType(), sqlExecutor.executeCount(sql, preparedArgs));
+                case EXISTS -> sqlExecutor.executeCount(sql, preparedArgs) > 0;
+                case DELETE -> runInTransaction(() ->
+                        coerceDelete(method.getReturnType(), sqlExecutor.executeUpdate(sql, preparedArgs)));
+            };
+        } catch (VictorException e) {
+            throw e;
         } catch (Exception e) {
-            throw new VictorException("Failed to execute dynamic query: " + method.getName(), e);
+            throw new VictorException("Failed to execute derived query: " + method.getName(), e);
         }
     }
 
+    private Object executeDerivedFind(Method method, String sql, Object[] preparedArgs) {
+        SqlExecutor.RowMapper<E> mapper = EntityMapper.createMapper(entityClass, entityMetadata, sqlExecutor);
+
+        Class<?> returnType = method.getReturnType();
+        if (returnType == Optional.class) {
+            return Optional.ofNullable(sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper));
+        } else if (List.class.isAssignableFrom(returnType)) {
+            return sqlExecutor.executeQuery(sql, preparedArgs, mapper);
+        } else if (returnType.isAssignableFrom(entityClass)) {
+            return sqlExecutor.executeQuerySingle(sql, preparedArgs, mapper);
+        } else {
+            throw new VictorException("Unsupported return type for dynamic query: " + returnType);
+        }
+    }
+
+    private Object coerceCount(Class<?> returnType, long count) {
+        if (returnType == int.class || returnType == Integer.class) {
+            return (int) count;
+        }
+        return count;
+    }
+
+    private Object coerceDelete(Class<?> returnType, int rowsAffected) {
+        if (returnType == void.class || returnType == Void.class) {
+            return null;
+        }
+        if (returnType == long.class || returnType == Long.class) {
+            return (long) rowsAffected;
+        }
+        if (returnType == int.class || returnType == Integer.class) {
+            return rowsAffected;
+        }
+        if (returnType == boolean.class || returnType == Boolean.class) {
+            return rowsAffected > 0;
+        }
+        return null;
+    }
+
+    /**
+     * Flattens method arguments into JDBC positional parameters, in the same
+     * condition order used by {@link DynamicQuerySqlGenerator#generateSql}.
+     * {@code In}/{@code NotIn} collection arguments are expanded element by
+     * element; {@code Like}/{@code NotLike} arguments get wildcard handling.
+     */
     private Object[] prepareArguments(MethodNameParser.ParsedQuery parsedQuery, Object[] args) {
         if (args == null || args.length == 0) return args;
 
-        Object[] prepared = new Object[args.length];
+        List<Object> prepared = new ArrayList<>();
         int argIndex = 0;
 
         for (MethodNameParser.WhereCondition condition : parsedQuery.conditions()) {
@@ -416,19 +472,42 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
             }
 
             Object arg = args[argIndex];
-            if (condition.operator().equals("Like") || condition.operator().equals("NotLike")) {
-                if (arg instanceof String str) {
-                    if (!str.contains("%") && !str.contains("_")) {
-                        arg = "%" + dialect.escapeLikePattern(str) + "%";
-                    } else {
-                        arg = dialect.escapeLikePattern(str);
-                    }
-                }
+            String operator = condition.operator();
+
+            if (operator.equals("In") || operator.equals("NotIn")) {
+                addInArguments(prepared, arg);
+            } else if (operator.equals("Like") || operator.equals("NotLike")) {
+                prepared.add(prepareLikeArgument(arg));
+            } else {
+                prepared.add(arg);
             }
-            prepared[argIndex] = arg;
             argIndex++;
         }
-        return prepared;
+        return prepared.toArray();
+    }
+
+    private void addInArguments(List<Object> prepared, Object arg) {
+        if (arg instanceof Collection<?> collection) {
+            prepared.addAll(collection);
+        } else if (arg != null && arg.getClass().isArray()) {
+            int length = Array.getLength(arg);
+            for (int i = 0; i < length; i++) {
+                prepared.add(Array.get(arg, i));
+            }
+        } else if (arg != null) {
+            prepared.add(arg);
+        }
+        // null or empty collection -> no parameters (matches the 1=0 / 1=1 SQL)
+    }
+
+    private Object prepareLikeArgument(Object arg) {
+        if (arg instanceof String str) {
+            if (!str.contains("%") && !str.contains("_")) {
+                return "%" + dialect.escapeLikePattern(str) + "%";
+            }
+            return dialect.escapeLikePattern(str);
+        }
+        return arg;
     }
 
     // ========== Cascade persistence ==========
@@ -550,67 +629,36 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
         return (E) withField(entity, entityMetadata.getIdField().getFieldName(), generatedId);
     }
 
-    /** Reads a field (record component or class field) by name on an arbitrary entity. */
+    /** Reads a record component by name on an entity (entities are always records). */
     private Object readField(Object entity, String fieldName) {
         Class<?> clazz = entity.getClass();
         try {
-            if (clazz.isRecord()) {
-                return clazz.getMethod(fieldName).invoke(entity);
-            }
-            java.lang.reflect.Field field = findEntityField(clazz, fieldName);
-            if (field == null) {
-                throw new VictorException("Field not found: " + fieldName + " on " + clazz.getSimpleName());
-            }
-            field.setAccessible(true);
-            return field.get(entity);
-        } catch (VictorException e) {
-            throw e;
+            return clazz.getMethod(fieldName).invoke(entity);
         } catch (Exception e) {
             throw new VictorException("Failed to read field '" + fieldName + "' on " + clazz.getSimpleName(), e);
         }
     }
 
     /**
-     * Returns a copy of {@code entity} with {@code fieldName} set to {@code value}.
-     * Records are rebuilt through their canonical constructor; mutable classes are
-     * updated in place and returned.
+     * Returns a copy of {@code entity} with {@code fieldName} set to {@code value},
+     * rebuilt through the record's canonical constructor (entities are immutable records).
      */
     private Object withField(Object entity, String fieldName, Object value) {
         Class<?> clazz = entity.getClass();
         try {
-            if (clazz.isRecord()) {
-                var components = clazz.getRecordComponents();
-                Object[] args = new Object[components.length];
-                Class<?>[] types = new Class<?>[components.length];
-                for (int i = 0; i < components.length; i++) {
-                    types[i] = components[i].getType();
-                    args[i] = components[i].getName().equals(fieldName)
-                            ? value
-                            : clazz.getMethod(components[i].getName()).invoke(entity);
-                }
-                return clazz.getDeclaredConstructor(types).newInstance(args);
+            var components = clazz.getRecordComponents();
+            Object[] args = new Object[components.length];
+            Class<?>[] types = new Class<?>[components.length];
+            for (int i = 0; i < components.length; i++) {
+                types[i] = components[i].getType();
+                args[i] = components[i].getName().equals(fieldName)
+                        ? value
+                        : clazz.getMethod(components[i].getName()).invoke(entity);
             }
-            java.lang.reflect.Field field = findEntityField(clazz, fieldName);
-            if (field != null) {
-                field.setAccessible(true);
-                field.set(entity, value);
-            }
-            return entity;
+            return clazz.getDeclaredConstructor(types).newInstance(args);
         } catch (Exception e) {
             throw new VictorException("Failed to set field '" + fieldName + "' on " + clazz.getSimpleName(), e);
         }
-    }
-
-    private java.lang.reflect.Field findEntityField(Class<?> clazz, String fieldName) {
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
     }
 
     @SuppressWarnings("unchecked")

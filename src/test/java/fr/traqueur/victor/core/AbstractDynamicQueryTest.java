@@ -136,4 +136,63 @@ public abstract class AbstractDynamicQueryTest extends AbstractVictorTest {
         assertEquals(2, names.size());
         assertTrue(names.get(0).compareTo(names.get(1)) >= 0);
     }
+
+    // ─── IN avec collection ─────────────────────────────────────────────────────
+
+    @Test
+    void testFindByIdIn() {
+        String prefix = "in_" + System.nanoTime() + "_";
+        UserEntity a = userRepository.save(new UserEntity(null, prefix + "a", "a@test.com", 25, true, "A"));
+        UserEntity b = userRepository.save(new UserEntity(null, prefix + "b", "b@test.com", 25, true, "B"));
+        UserEntity c = userRepository.save(new UserEntity(null, prefix + "c", "c@test.com", 25, true, "C"));
+
+        List<UserEntity> result = userRepository.findByIdIn(List.of(a.id(), c.id()));
+
+        List<Long> ids = result.stream().map(UserEntity::id).toList();
+        assertTrue(ids.contains(a.id()));
+        assertTrue(ids.contains(c.id()));
+        assertFalse(ids.contains(b.id()));
+    }
+
+    @Test
+    void testFindByIdInEmptyReturnsEmpty() {
+        userRepository.save(new UserEntity(null, "empin_" + System.nanoTime(), "e@test.com", 25, true, "E"));
+
+        List<UserEntity> result = userRepository.findByIdIn(List.of());
+
+        assertTrue(result.isEmpty());
+    }
+
+    // ─── existsBy / countBy / deleteBy dérivés ──────────────────────────────────
+
+    @Test
+    void testExistsByUsername() {
+        String username = "exists_" + System.nanoTime();
+        userRepository.save(new UserEntity(null, username, "e@test.com", 25, true, "Exists"));
+
+        assertTrue(userRepository.existsByUsername(username));
+        assertFalse(userRepository.existsByUsername("nope_" + System.nanoTime()));
+    }
+
+    @Test
+    void testCountByAgeGreaterThan() {
+        userRepository.save(new UserEntity(null, "cnt1_" + System.nanoTime(), "c1@test.com", 9001, true, "C1"));
+        userRepository.save(new UserEntity(null, "cnt2_" + System.nanoTime(), "c2@test.com", 9002, true, "C2"));
+
+        long count = userRepository.countByAgeGreaterThan(9000);
+
+        assertTrue(count >= 2);
+    }
+
+    @Test
+    void testDeleteByUsername() {
+        String username = "del_" + System.nanoTime();
+        userRepository.save(new UserEntity(null, username, "d@test.com", 25, true, "Del"));
+        assertTrue(userRepository.existsByUsername(username));
+
+        int deleted = userRepository.deleteByUsername(username);
+
+        assertEquals(1, deleted);
+        assertFalse(userRepository.existsByUsername(username));
+    }
 }

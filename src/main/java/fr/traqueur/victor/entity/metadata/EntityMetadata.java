@@ -5,8 +5,6 @@ import fr.traqueur.victor.exceptions.VictorConfigurationException;
 import fr.traqueur.victor.registries.EntityMetadataRegistry;
 import fr.traqueur.victor.utils.StringUtils;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,6 +30,10 @@ public final class EntityMetadata {
     private EntityMetadata(Class<?> entityClass) {
         this.entityClass = entityClass;
 
+        if (!entityClass.isRecord()) {
+            throw new VictorConfigurationException("Victor entities must be Java records: " + entityClass);
+        }
+
         var tableAnn = entityClass.getAnnotation(Table.class);
         if (tableAnn == null) {
             throw new VictorConfigurationException("E must be annotated with @Table: " + entityClass);
@@ -45,11 +47,7 @@ public final class EntityMetadata {
         List<FieldMetadata> scalars = new ArrayList<>();
         List<RelationshipMetadata> rels = new ArrayList<>();
 
-        if (entityClass.isRecord()) {
-            analyzeRecord(entityClass, scalars, rels);
-        } else {
-            analyzeClass(entityClass, scalars, rels);
-        }
+        analyzeRecord(entityClass, scalars, rels);
 
         FieldMetadata id = scalars.stream().filter(FieldMetadata::isId).findFirst().orElse(null);
         if (id == null) {
@@ -97,43 +95,6 @@ public final class EntityMetadata {
                 }
             }
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Class analysis (class-based DTOs)
-    // -------------------------------------------------------------------------
-
-    private void analyzeClass(Class<?> clazz, List<FieldMetadata> scalars, List<RelationshipMetadata> rels) {
-        int idCount = 0;
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            for (Field field : current.getDeclaredFields()) {
-                if (shouldIgnoreField(field)) continue;
-
-                RelationshipMetadata rel = RelationshipMetadata.ofField(field);
-                if (rel != null) {
-                    rels.add(rel);
-                    continue;
-                }
-
-                FieldMetadata fm = FieldMetadata.of(field);
-                scalars.add(fm);
-
-                if (fm.isId()) {
-                    idCount++;
-                    if (idCount > 1) {
-                        throw new VictorConfigurationException("Multiple @Id fields found in E: " + clazz);
-                    }
-                }
-            }
-            current = current.getSuperclass();
-        }
-    }
-
-    private boolean shouldIgnoreField(Field field) {
-        return field.isAnnotationPresent(Ignore.class)
-            || Modifier.isStatic(field.getModifiers())
-            || Modifier.isTransient(field.getModifiers());
     }
 
     // -------------------------------------------------------------------------

@@ -30,11 +30,7 @@ public final class EntityMapper {
     private static <E extends Entity<MODEL>, MODEL extends Model<ID>, ID> E mapResultSetToEntity(
             ResultSet rs, Class<E> entityClass, EntityMetadata metadata, SqlExecutor sqlExecutor) {
         try {
-            if (entityClass.isRecord()) {
-                return mapToRecord(rs, entityClass, metadata, sqlExecutor);
-            } else {
-                return mapToClass(rs, entityClass, metadata, sqlExecutor);
-            }
+            return mapToRecord(rs, entityClass, metadata, sqlExecutor);
         } catch (Exception e) {
             throw new VictorConversionException(ResultSet.class, entityClass,
                     "Failed to map ResultSet to E", e);
@@ -85,44 +81,6 @@ public final class EntityMapper {
                 Arrays.stream(components).map(RecordComponent::getType).toArray(Class[]::new)
         );
         return constructor.newInstance(args);
-    }
-
-    private static <E extends Entity<MODEL>, MODEL extends Model<ID>, ID> E mapToClass(
-            ResultSet rs, Class<E> entityClass, EntityMetadata metadata, SqlExecutor sqlExecutor)
-            throws Exception {
-
-        E entity = entityClass.getDeclaredConstructor().newInstance();
-        Object currentId = readCurrentId(rs, metadata);
-        Dialect dialect = sqlExecutor.dialect();
-
-        for (var field : entityClass.getDeclaredFields()) {
-            field.setAccessible(true);
-            String fieldName = field.getName();
-
-            RelationshipMetadata rel = metadata.findRelationshipByFieldName(fieldName);
-            if (rel != null) {
-                if (rel.getFetchType() == FetchType.EAGER
-                        && !RelationshipLoadingContext.isAlreadyLoading(rel.getTargetEntityClass())) {
-                    field.set(entity, loadRelationship(rel, rs, currentId, sqlExecutor, dialect));
-                }
-                continue;
-            }
-
-            FieldMetadata fieldMetadata = findFieldByName(metadata, fieldName);
-            if (fieldMetadata != null) {
-                Object value = sqlExecutor.getFieldValue(rs, fieldMetadata);
-                field.set(entity, convertValue(value, field.getType()));
-            } else {
-                try {
-                    Object value = rs.getObject(fieldName);
-                    field.set(entity, convertValue(value, field.getType()));
-                } catch (SQLException e) {
-                    // Column doesn't exist in result set, skip
-                }
-            }
-        }
-
-        return entity;
     }
 
     private static Object readCurrentId(ResultSet rs, EntityMetadata metadata) {

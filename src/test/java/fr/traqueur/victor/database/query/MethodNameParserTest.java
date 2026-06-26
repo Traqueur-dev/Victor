@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,10 +31,19 @@ class MethodNameParserTest {
         List<Object> findByNameNotLike(String pattern);
         List<Object> findByIdIn(List<Long> ids);
         List<Object> findByIdNotIn(List<Long> ids);
+        // Préfixes dérivés
+        long countByActive(boolean active);
+        boolean existsByUsername(String username);
+        int deleteByAgeLessThan(int age);
+        // Champ contenant "Or" : casse le split naïf, géré par le tokenizer field-aware
+        List<Object> findByIsOrdered(boolean ordered);
         // Cas d'erreur
         void doSomething();
         List<Object> findByUsernameWrongParamCount();
     }
+
+    private static final Set<String> FIELDS =
+            Set.of("id", "username", "email", "age", "active", "name", "isOrdered");
 
     private Method method(String name, Class<?>... params) throws NoSuchMethodException {
         return TestRepo.class.getMethod(name, params);
@@ -181,6 +191,57 @@ class MethodNameParserTest {
         assertEquals(Query.Order.ASC, parsed.orderBy().get(0).direction());
         assertEquals("Name", parsed.orderBy().get(1).fieldName());
         assertEquals(Query.Order.DESC, parsed.orderBy().get(1).direction());
+    }
+
+    // ─── QueryKind / préfixes dérivés ───────────────────────────────────────────
+
+    @Test
+    void testKindFind() throws Exception {
+        var parsed = MethodNameParser.parse(method("findByUsername", String.class), FIELDS);
+        assertEquals(MethodNameParser.QueryKind.FIND, parsed.kind());
+    }
+
+    @Test
+    void testKindCount() throws Exception {
+        var parsed = MethodNameParser.parse(method("countByActive", boolean.class), FIELDS);
+        assertEquals(MethodNameParser.QueryKind.COUNT, parsed.kind());
+        assertEquals("Active", parsed.conditions().get(0).fieldName());
+        assertEquals("Equal", parsed.conditions().get(0).operator());
+    }
+
+    @Test
+    void testKindExists() throws Exception {
+        var parsed = MethodNameParser.parse(method("existsByUsername", String.class), FIELDS);
+        assertEquals(MethodNameParser.QueryKind.EXISTS, parsed.kind());
+        assertEquals("Username", parsed.conditions().get(0).fieldName());
+    }
+
+    @Test
+    void testKindDelete() throws Exception {
+        var parsed = MethodNameParser.parse(method("deleteByAgeLessThan", int.class), FIELDS);
+        assertEquals(MethodNameParser.QueryKind.DELETE, parsed.kind());
+        assertEquals("Age", parsed.conditions().get(0).fieldName());
+        assertEquals("LessThan", parsed.conditions().get(0).operator());
+    }
+
+    // ─── Tokenizer field-aware : champ contenant "Or" ───────────────────────────
+
+    @Test
+    void testTokenizerDisambiguatesOrInsideFieldName() throws Exception {
+        // Avec la connaissance des champs, "IsOrdered" est un seul champ, pas "Is" OR "dered".
+        var parsed = MethodNameParser.parse(method("findByIsOrdered", boolean.class), FIELDS);
+        assertEquals(1, parsed.conditions().size());
+        assertEquals("IsOrdered", parsed.conditions().get(0).fieldName());
+        assertEquals("Equal", parsed.conditions().get(0).operator());
+        assertNull(parsed.conditions().get(0).connector());
+    }
+
+    @Test
+    void testLegacySplitMisparsesOrInFieldName() throws Exception {
+        // Sans champs connus, l'heuristique legacy casse sur le "Or" interne : "IsOrdered"
+        // devient "Is" OR "dered" (2 conditions) → 2 paramètres attendus pour 1 réel → erreur.
+        assertThrows(VictorException.class, () ->
+                MethodNameParser.parse(method("findByIsOrdered", boolean.class)));
     }
 
     // ─── Cas d'erreur ───────────────────────────────────────────────────────────

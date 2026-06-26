@@ -49,6 +49,13 @@ class EntityMetadataTest {
         @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
     }
 
+    // Class-based entity (not a record) — must be rejected: entities are record-only.
+    @Table(table = "class_users")
+    static class ClassBasedEntity implements Entity<InvalidUserModel> {
+        @Id Long id;
+        @Override public InvalidUserModel toModel() { return new InvalidUserModel(); }
+    }
+
     @Test
     void testEntityMetadataCreation() {
         var metadata = EntityMetadata.of(TestUserEntity.class);
@@ -114,6 +121,14 @@ class EntityMetadataTest {
     void testMultipleIdFields() {
         assertThrows(VictorConfigurationException.class, () ->
             EntityMetadata.of(MultipleIdEntity.class)
+        );
+    }
+
+    @Test
+    void testClassBasedEntityIsRejected() {
+        // Entities must be Java records; a class-based entity must be rejected.
+        assertThrows(VictorConfigurationException.class, () ->
+            EntityMetadata.of(ClassBasedEntity.class)
         );
     }
 
