@@ -629,67 +629,36 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
         return (E) withField(entity, entityMetadata.getIdField().getFieldName(), generatedId);
     }
 
-    /** Reads a field (record component or class field) by name on an arbitrary entity. */
+    /** Reads a record component by name on an entity (entities are always records). */
     private Object readField(Object entity, String fieldName) {
         Class<?> clazz = entity.getClass();
         try {
-            if (clazz.isRecord()) {
-                return clazz.getMethod(fieldName).invoke(entity);
-            }
-            java.lang.reflect.Field field = findEntityField(clazz, fieldName);
-            if (field == null) {
-                throw new VictorException("Field not found: " + fieldName + " on " + clazz.getSimpleName());
-            }
-            field.setAccessible(true);
-            return field.get(entity);
-        } catch (VictorException e) {
-            throw e;
+            return clazz.getMethod(fieldName).invoke(entity);
         } catch (Exception e) {
             throw new VictorException("Failed to read field '" + fieldName + "' on " + clazz.getSimpleName(), e);
         }
     }
 
     /**
-     * Returns a copy of {@code entity} with {@code fieldName} set to {@code value}.
-     * Records are rebuilt through their canonical constructor; mutable classes are
-     * updated in place and returned.
+     * Returns a copy of {@code entity} with {@code fieldName} set to {@code value},
+     * rebuilt through the record's canonical constructor (entities are immutable records).
      */
     private Object withField(Object entity, String fieldName, Object value) {
         Class<?> clazz = entity.getClass();
         try {
-            if (clazz.isRecord()) {
-                var components = clazz.getRecordComponents();
-                Object[] args = new Object[components.length];
-                Class<?>[] types = new Class<?>[components.length];
-                for (int i = 0; i < components.length; i++) {
-                    types[i] = components[i].getType();
-                    args[i] = components[i].getName().equals(fieldName)
-                            ? value
-                            : clazz.getMethod(components[i].getName()).invoke(entity);
-                }
-                return clazz.getDeclaredConstructor(types).newInstance(args);
+            var components = clazz.getRecordComponents();
+            Object[] args = new Object[components.length];
+            Class<?>[] types = new Class<?>[components.length];
+            for (int i = 0; i < components.length; i++) {
+                types[i] = components[i].getType();
+                args[i] = components[i].getName().equals(fieldName)
+                        ? value
+                        : clazz.getMethod(components[i].getName()).invoke(entity);
             }
-            java.lang.reflect.Field field = findEntityField(clazz, fieldName);
-            if (field != null) {
-                field.setAccessible(true);
-                field.set(entity, value);
-            }
-            return entity;
+            return clazz.getDeclaredConstructor(types).newInstance(args);
         } catch (Exception e) {
             throw new VictorException("Failed to set field '" + fieldName + "' on " + clazz.getSimpleName(), e);
         }
-    }
-
-    private java.lang.reflect.Field findEntityField(Class<?> clazz, String fieldName) {
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
     }
 
     @SuppressWarnings("unchecked")
