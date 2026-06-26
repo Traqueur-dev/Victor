@@ -108,8 +108,6 @@ public final class FieldMetadata {
             if (embeddedAccessor != null) {
                 Object embedded = embeddedAccessor.invoke(obj);
                 return embedded == null ? null : recordAccessor.invoke(embedded);
-            if (recordAccessor != null) {
-                return recordAccessor.invoke(obj);
             }
             return recordAccessor.invoke(obj);
         } catch (Exception e) {
