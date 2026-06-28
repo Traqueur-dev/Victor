@@ -24,6 +24,10 @@ subprojects {
         testImplementation("org.testcontainers:testcontainers-postgresql")
     }
 
+    tasks.matching { it.name == "compileTestJava" || it.name == "test" }.configureEach {
+        dependsOn(rootProject.tasks.named("testClasses"))
+    }
+
     java {
         withSourcesJar()
         withJavadocJar()
