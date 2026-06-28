@@ -201,10 +201,17 @@ public class PostegreSQLDialect implements Dialect {
             } else {
                 return "TEXT";
             }
+        } else if (javaType.isEnum()) {
+            int length = fieldMetadata != null ? fieldMetadata.getLength() : 255;
+            return "VARCHAR(" + length + ")";
         } else if (javaType == Long.class || javaType == long.class) {
             return "BIGINT";
         } else if (javaType == Integer.class || javaType == int.class) {
             return "INTEGER";
+        } else if (javaType == Short.class || javaType == short.class) {
+            return "SMALLINT";
+        } else if (javaType == Byte.class || javaType == byte.class) {
+            return "SMALLINT";
         } else if (javaType == Boolean.class || javaType == boolean.class) {
             return "BOOLEAN";
         } else if (javaType == Double.class || javaType == double.class) {
@@ -237,11 +244,6 @@ public class PostegreSQLDialect implements Dialect {
 
     @Override
     public boolean supportsSchemas() {
-        return true;
-    }
-
-    @Override
-    public boolean supportsSequences() {
         return true;
     }
 

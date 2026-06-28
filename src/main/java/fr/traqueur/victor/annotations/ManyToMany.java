@@ -19,6 +19,4 @@ public @interface ManyToMany {
     String inverseJoinColumn();
 
     FetchType fetch() default FetchType.EAGER;
-
-    CascadeType[] cascade() default {};
 }

@@ -91,7 +91,6 @@ public final class RelationshipMetadata {
                 .joinColumn(mtm.joinColumn())
                 .inverseJoinColumn(mtm.inverseJoinColumn())
                 .fetch(mtm.fetch())
-                .cascade(mtm.cascade())
                 .build();
         }
 
@@ -101,7 +100,7 @@ public final class RelationshipMetadata {
             String col = isOwning
                 ? (oto.column().isEmpty() ? StringUtils.camelToSnakeCase(name) + "_id" : oto.column())
                 : null;
-            Class<?> target = isOwning ? oto.targetEntity() : resolveCollectionGeneric(component.getGenericType());
+            Class<?> target = isOwning ? oto.targetEntity() : component.getType();
             return new Builder(name, target, RelationType.ONE_TO_ONE)
                 .foreignKeyColumn(col)
                 .mappedBy(oto.mappedBy())
@@ -150,7 +149,6 @@ public final class RelationshipMetadata {
                 .joinColumn(mtm.joinColumn())
                 .inverseJoinColumn(mtm.inverseJoinColumn())
                 .fetch(mtm.fetch())
-                .cascade(mtm.cascade())
                 .build();
         }
 
@@ -160,7 +158,7 @@ public final class RelationshipMetadata {
             String col = isOwning
                 ? (oto.column().isEmpty() ? StringUtils.camelToSnakeCase(name) + "_id" : oto.column())
                 : null;
-            Class<?> target = isOwning ? oto.targetEntity() : resolveCollectionGeneric(field.getGenericType());
+            Class<?> target = isOwning ? oto.targetEntity() : field.getType();
             return new Builder(name, target, RelationType.ONE_TO_ONE)
                 .foreignKeyColumn(col)
                 .mappedBy(oto.mappedBy())

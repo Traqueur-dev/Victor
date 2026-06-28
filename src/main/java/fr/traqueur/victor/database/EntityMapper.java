@@ -198,6 +198,7 @@ public final class EntityMapper {
         if (targetType.isInstance(value)) return value;
         if (targetType == String.class) return value.toString();
         if (targetType == UUID.class && value instanceof String str) return UUID.fromString(str);
+        if (targetType.isEnum()) return toEnum(targetType, value.toString());
 
         if (value instanceof Number number) {
             if (targetType == Long.class || targetType == long.class) return number.longValue();
@@ -219,6 +220,11 @@ public final class EntityMapper {
         }
 
         return value;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object toEnum(Class<?> enumType, String name) {
+        return Enum.valueOf((Class<? extends Enum>) enumType, name);
     }
 
     private static Object getDefaultValue(Class<?> type) {

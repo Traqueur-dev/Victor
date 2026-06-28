@@ -2,8 +2,11 @@ package fr.traqueur.victor;
 
 import fr.traqueur.victor.entity.Entity;
 import fr.traqueur.victor.entity.dialect.Dialect;
+import fr.traqueur.victor.entity.metadata.EntityMetadata;
+import fr.traqueur.victor.entity.metadata.RelationshipMetadata;
 import fr.traqueur.victor.exceptions.VictorConfigurationException;
 import fr.traqueur.victor.registries.DialectRegistry;
+import fr.traqueur.victor.registries.EntityMetadataRegistry;
 import fr.traqueur.victor.scanner.EntityScanner;
 import fr.traqueur.victor.security.SecureCredentials;
 
@@ -174,6 +177,7 @@ public final class VictorBuilder {
 
     public Victor build() {
         validate();
+        validateEntities();
 
         VictorConfiguration config = createConfiguration();
         VictorEngine engine = new VictorEngine(config);
@@ -203,6 +207,39 @@ public final class VictorBuilder {
                     throw new VictorConfigurationException("Database name required for " + dialect.getName());
                 }
             }
+        }
+    }
+
+    /**
+     * Fails fast on structurally misconfigured entities (before opening any connection): each
+     * registered entity must be a valid record with a single {@code @Id}, and every relationship
+     * must target a record entity. The {@code fromModel} companion is only required for entities
+     * used through a {@code Service}, so it is validated at service creation, not here.
+     */
+    private void validateEntities() {
+        if (entityClasses.isEmpty()) {
+            return;
+        }
+        EntityMetadataRegistry registry = EntityMetadataRegistry.getInstance();
+        List<String> errors = new ArrayList<>();
+        for (Class<? extends Entity<?>> entityClass : entityClasses) {
+            try {
+                EntityMetadata metadata = registry.getMetadata(entityClass);
+                for (RelationshipMetadata rel : metadata.getRelationships()) {
+                    Class<?> target = rel.getTargetEntityClass();
+                    if (target == null || !Entity.class.isAssignableFrom(target) || !target.isRecord()) {
+                        errors.add(entityClass.getSimpleName() + ": relationship '" + rel.getFieldName()
+                                + "' must target a record entity, but got "
+                                + (target == null ? "null" : target.getSimpleName()));
+                    }
+                }
+            } catch (RuntimeException e) {
+                errors.add(entityClass.getSimpleName() + ": " + e.getMessage());
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new VictorConfigurationException(
+                    "Invalid entity configuration:\n  - " + String.join("\n  - ", errors));
         }
     }
 

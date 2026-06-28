@@ -3,6 +3,8 @@ package fr.traqueur.victor.core;
 import fr.traqueur.victor.entity.AuthorEntity;
 import fr.traqueur.victor.entity.BookEntity;
 import fr.traqueur.victor.entity.CourseEntity;
+import fr.traqueur.victor.entity.PassportEntity;
+import fr.traqueur.victor.entity.PersonEntity;
 import fr.traqueur.victor.entity.StudentEntity;
 import org.junit.jupiter.api.Test;
 
@@ -72,6 +74,22 @@ public abstract class AbstractRelationshipTest extends AbstractVictorTest {
         BookEntity loaded = bookRepo.findById(book.id()).orElseThrow();
         assertNotNull(loaded.author());
         assertEquals(book.author().id(), loaded.author().id());
+    }
+
+    @Test
+    void testOneToOneOwningAndInverse() {
+        PersonEntity person = personRepo.save(new PersonEntity(null, "Ada Lovelace", null));
+        PassportEntity passport = passportRepo.save(new PassportEntity(null, "P-12345", person));
+
+        // owning side loads the related person via the FK column
+        PassportEntity loadedPassport = passportRepo.findById(passport.id()).orElseThrow();
+        assertNotNull(loadedPassport.person());
+        assertEquals(person.id(), loadedPassport.person().id());
+
+        // inverse side loads the passport via mappedBy
+        PersonEntity loadedPerson = personRepo.findById(person.id()).orElseThrow();
+        assertNotNull(loadedPerson.passport());
+        assertEquals(passport.id(), loadedPerson.passport().id());
     }
 
     @Test

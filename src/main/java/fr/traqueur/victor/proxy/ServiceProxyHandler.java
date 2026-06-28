@@ -30,6 +30,8 @@ public class ServiceProxyHandler<MODEL extends Model<ID>, E extends Entity<MODEL
         var typeInfo = TypeResolver.resolveServiceTypes(serviceInterface);
         this.modelClass = typeInfo.modelClass();
         this.entityClass = typeInfo.entityClass();
+        // A service converts models to entities, so the entity must declare fromModel — fail fast here.
+        VictorConverter.assertConvertible(this.entityClass);
         this.repositoryInterface = typeInfo.repositoryClass();
         this.repository = RepositoryProxyHandler.createProxy(
                 repositoryInterface,

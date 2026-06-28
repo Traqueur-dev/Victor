@@ -391,6 +391,7 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         return switch (value) {
             case null -> null;
             case UUID uuid -> uuid.toString();
+            case Enum<?> e -> e.name();
             case LocalDateTime ldt -> Timestamp.valueOf(ldt);
             case LocalDate ld -> Date.valueOf(ld);
             case LocalTime lt -> Time.valueOf(lt);
@@ -446,6 +447,11 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
                 return rs.getTime(columnName);
             } else if (javaType == byte[].class) {
                 return rs.getBytes(columnName);
+            } else if (javaType == UUID.class) {
+                String value = rs.getString(columnName);
+                return value == null ? null : UUID.fromString(value);
+            } else if (javaType.isEnum()) {
+                return rs.getString(columnName);
             } else {
                 // Fallback pour types non supportés
                 return rs.getObject(columnName);

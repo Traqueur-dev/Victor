@@ -165,11 +165,15 @@ public class SQLiteDialect implements Dialect {
 
     @Override
     public String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata) {
-        if (javaType == String.class) {
+        if (javaType == String.class || javaType.isEnum()) {
             return "TEXT";
         } else if (javaType == Long.class || javaType == long.class) {
             return "INTEGER";
         } else if (javaType == Integer.class || javaType == int.class) {
+            return "INTEGER";
+        } else if (javaType == Short.class || javaType == short.class) {
+            return "INTEGER";
+        } else if (javaType == Byte.class || javaType == byte.class) {
             return "INTEGER";
         } else if (javaType == Boolean.class || javaType == boolean.class) {
             return "INTEGER";
@@ -177,7 +181,13 @@ public class SQLiteDialect implements Dialect {
             return "REAL";
         } else if (javaType == Float.class || javaType == float.class) {
             return "REAL";
+        } else if (javaType == java.math.BigDecimal.class) {
+            return "NUMERIC";
         } else if (javaType == java.time.LocalDateTime.class) {
+            return "TEXT";
+        } else if (javaType == java.time.LocalDate.class) {
+            return "TEXT";
+        } else if (javaType == java.time.LocalTime.class) {
             return "TEXT";
         } else if (javaType == byte[].class) {
             return "BLOB";
@@ -195,11 +205,6 @@ public class SQLiteDialect implements Dialect {
 
     @Override
     public boolean supportsSchemas() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsSequences() {
         return false;
     }
 

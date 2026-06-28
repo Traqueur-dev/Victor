@@ -131,21 +131,33 @@ public class H2Dialect implements Dialect {
 
     @Override
     public String mapJavaTypeToSql(Class<?> javaType, FieldMetadata fieldMetadata) {
-        if (javaType == String.class) {
+        if (javaType == String.class || javaType.isEnum()) {
             int length = fieldMetadata != null ? fieldMetadata.getLength() : 255;
             return "VARCHAR(" + length + ")";
         } else if (javaType == Long.class || javaType == long.class) {
             return "BIGINT";
         } else if (javaType == Integer.class || javaType == int.class) {
             return "INTEGER";
+        } else if (javaType == Short.class || javaType == short.class) {
+            return "SMALLINT";
+        } else if (javaType == Byte.class || javaType == byte.class) {
+            return "TINYINT";
         } else if (javaType == Boolean.class || javaType == boolean.class) {
             return "BOOLEAN";
         } else if (javaType == Double.class || javaType == double.class) {
             return "DOUBLE";
         } else if (javaType == Float.class || javaType == float.class) {
             return "REAL";
+        } else if (javaType == java.math.BigDecimal.class) {
+            return "DECIMAL(19, 2)";
         } else if (javaType == java.time.LocalDateTime.class) {
             return "TIMESTAMP";
+        } else if (javaType == java.time.LocalDate.class) {
+            return "DATE";
+        } else if (javaType == java.time.LocalTime.class) {
+            return "TIME";
+        } else if (javaType == byte[].class) {
+            return "BLOB";
         } else if (javaType == java.util.UUID.class) {
             return "UUID";
         } else {
@@ -160,11 +172,6 @@ public class H2Dialect implements Dialect {
 
     @Override
     public boolean supportsSchemas() {
-        return true;
-    }
-
-    @Override
-    public boolean supportsSequences() {
         return true;
     }
 

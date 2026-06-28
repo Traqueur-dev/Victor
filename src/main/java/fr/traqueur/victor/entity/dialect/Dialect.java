@@ -29,8 +29,6 @@ public interface Dialect {
 
     boolean supportsSchemas();
 
-    boolean supportsSequences();
-
     boolean supportsJsonType();
 
     boolean isEmbedded();

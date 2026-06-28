@@ -48,6 +48,14 @@ public abstract class AbstractTestRunner {
     }
 
     @Nested
+    class TypeMapping extends AbstractTypeMappingTest {
+        @Override
+        protected VictorBuilder configureVictor() {
+            return AbstractTestRunner.this.configureVictor();
+        }
+    }
+
+    @Nested
     class ServiceLayer extends AbstractUserServiceTest {
         @Override
         protected VictorBuilder configureVictor() {
