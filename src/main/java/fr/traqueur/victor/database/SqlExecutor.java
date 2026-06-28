@@ -390,7 +390,7 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
     private Object convertForJdbc(Object value) {
         return switch (value) {
             case null -> null;
-            case UUID uuid -> uuid.toString();
+            case UUID uuid -> dialect.nativeUuidType() ? uuid : uuid.toString();
             case Enum<?> e -> e.name();
             case LocalDateTime ldt -> Timestamp.valueOf(ldt);
             case LocalDate ld -> Date.valueOf(ld);

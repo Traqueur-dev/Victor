@@ -1,4 +1,4 @@
-package fr.traqueur.victor.entity.dialect.postregresql;
+package fr.traqueur.victor.entity.dialect.postgresql;
 
 import fr.traqueur.victor.entity.dialect.Dialect;
 import fr.traqueur.victor.entity.metadata.EntityMetadata;
@@ -12,7 +12,7 @@ import java.time.LocalTime;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-public class PostegreSQLDialect implements Dialect {
+public class PostgreSQLDialect implements Dialect {
 
     @Override
     public String getName() {
@@ -240,6 +240,11 @@ public class PostegreSQLDialect implements Dialect {
     @Override
     public String quoteIdentifier(String identifier) {
         return "\"" + identifier.toLowerCase() + "\"";
+    }
+
+    @Override
+    public boolean nativeUuidType() {
+        return true;
     }
 
     @Override
