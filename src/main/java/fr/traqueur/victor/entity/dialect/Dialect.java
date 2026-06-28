@@ -33,6 +33,15 @@ public interface Dialect {
 
     boolean isEmbedded();
 
+    /**
+     * Whether the dialect has a native, strictly-typed UUID column type that must be bound as a
+     * {@link java.util.UUID} object rather than a String (e.g. PostgreSQL). Dialects that store
+     * UUIDs as text bind them as strings.
+     */
+    default boolean nativeUuidType() {
+        return false;
+    }
+
     String getAutoIncrementSyntax(Class<?> idType);
 
     String generateListTablesSQL(String schemaName);

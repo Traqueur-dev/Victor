@@ -17,7 +17,7 @@ dependencies {
         // Individual dialects
         api(project(":dialects:dialect-h2"))
         api(project(":dialects:dialect-mysql"))
-        api(project(":dialects:dialect-postregresql"))
+        api(project(":dialects:dialect-postgresql"))
         api(project(":dialects:dialect-sqlite"))
     }
 }
