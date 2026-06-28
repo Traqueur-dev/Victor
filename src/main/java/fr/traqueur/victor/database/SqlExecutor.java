@@ -43,24 +43,6 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         }
     }
 
-    public int executeUpsert(String sql, Object[] params) {
-        if (connectionManager.getConfiguration().showSql()) {
-            VictorLogger.debug("SQL (UPSERT): {}", sql);
-        }
-
-        Connection conn = connectionManager.getConnection();
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            if (params != null) {
-                setParameters(stmt, params);
-            }
-            return stmt.executeUpdate();
-        } catch (SQLException e) {
-            throw new VictorException("Failed to execute upsert: " + sql, e);
-        } finally {
-            closeConnectionIfNotTransactional(conn);
-        }
-    }
-
     public Set<String> executeQueryForStringSet(String sql) {
         if (connectionManager.getConfiguration().showSql()) {
             VictorLogger.debug("SQL: {}", sql);
@@ -406,22 +388,14 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
      * string that SQLite then fails to parse on read).</p>
      */
     private Object convertForJdbc(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof UUID uuid) {
-            return uuid.toString();
-        }
-        if (value instanceof LocalDateTime ldt) {
-            return Timestamp.valueOf(ldt);
-        }
-        if (value instanceof LocalDate ld) {
-            return Date.valueOf(ld);
-        }
-        if (value instanceof LocalTime lt) {
-            return Time.valueOf(lt);
-        }
-        return value;
+        return switch (value) {
+            case null -> null;
+            case UUID uuid -> uuid.toString();
+            case LocalDateTime ldt -> Timestamp.valueOf(ldt);
+            case LocalDate ld -> Date.valueOf(ld);
+            case LocalTime lt -> Time.valueOf(lt);
+            default -> value;
+        };
     }
 
     public Object getFieldValue(ResultSet rs, FieldMetadata fieldMetadata) {
