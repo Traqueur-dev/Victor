@@ -106,4 +106,53 @@ public abstract class AbstractRelationshipTest extends AbstractVictorTest {
         AuthorEntity loaded = authorRepo.findById(author.id()).orElseThrow();
         assertEquals(2, loaded.books().size());
     }
+
+    @Test
+    void testCascadeSyncUpdatesExistingAndRemovesOrphans() {
+        // Save two children, reload (so children carry their ids), then re-save a mutated set:
+        // one child updated, one dropped (orphan), one added.
+        AuthorEntity author = authorRepo.save(
+                new AuthorEntity(null, "Terry Pratchett", "UK", List.of(
+                        new BookEntity(null, "Guards! Guards!", null),
+                        new BookEntity(null, "Mort", null))));
+        Long authorId = author.id();
+
+        AuthorEntity loaded = authorRepo.findById(authorId).orElseThrow();
+        assertEquals(2, loaded.books().size());
+        BookEntity kept = loaded.books().stream()
+                .filter(b -> b.title().equals("Mort")).findFirst().orElseThrow();
+        Long droppedId = loaded.books().stream()
+                .filter(b -> b.title().equals("Guards! Guards!")).findFirst().orElseThrow().id();
+
+        // same id -> UPDATE ; null id -> INSERT ; "Guards! Guards!" absent -> orphan DELETE
+        authorRepo.save(new AuthorEntity(authorId, "Terry Pratchett", "UK", List.of(
+                new BookEntity(kept.id(), "Mort (revised)", null),
+                new BookEntity(null, "Reaper Man", null))));
+
+        AuthorEntity reloaded = authorRepo.findById(authorId).orElseThrow();
+        assertEquals(2, reloaded.books().size(), "updated + added, no duplicate");
+        assertTrue(reloaded.books().stream().anyMatch(b -> b.title().equals("Mort (revised)")));
+        assertTrue(reloaded.books().stream().anyMatch(b -> b.title().equals("Reaper Man")));
+        assertTrue(bookRepo.findById(droppedId).isEmpty(), "orphan row deleted");
+    }
+
+    @Test
+    void testCascadeDeleteRemovesChildren() {
+        AuthorEntity author = authorRepo.save(
+                new AuthorEntity(null, "Douglas Adams", "UK", List.of(
+                        new BookEntity(null, "The Hitchhiker's Guide", null),
+                        new BookEntity(null, "The Restaurant at the End of the Universe", null))));
+        Long authorId = author.id();
+        List<Long> bookIds = authorRepo.findById(authorId).orElseThrow()
+                .books().stream().map(BookEntity::id).toList();
+        assertEquals(2, bookIds.size());
+
+        // Deleting the parent cascade-deletes its children (FK-safe), no manual child cleanup.
+        authorRepo.deleteById(authorId);
+
+        assertTrue(authorRepo.findById(authorId).isEmpty());
+        for (Long bookId : bookIds) {
+            assertTrue(bookRepo.findById(bookId).isEmpty(), "child book deleted on cascade");
+        }
+    }
 }
