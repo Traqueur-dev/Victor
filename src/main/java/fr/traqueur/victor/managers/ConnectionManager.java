@@ -9,6 +9,8 @@ import fr.traqueur.victor.utils.VictorLogger;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,9 +29,16 @@ public final class ConnectionManager {
     private static final long DEFAULT_IDLE_TIMEOUT = 600000; // 10 minutes
     private static final long DEFAULT_MAX_LIFETIME = 1800000; // 30 minutes
 
+    // Pool-tuning keys recognized from connection properties (.property(...)). These are
+    // HikariCP settings, so they are applied via the HikariConfig setters below and NOT
+    // forwarded to the driver as DataSource properties.
+    private static final Set<String> POOL_SETTING_KEYS = Set.of(
+            "minimumIdle", "maximumPoolSize", "connectionTimeout", "idleTimeout", "maxLifetime");
+
     private final VictorConfiguration configuration;
     private final HikariDataSource dataSource;
     private final AtomicInteger refCount = new AtomicInteger(1);
+    private final ThreadLocal<Connection> activeConnection = new ThreadLocal<>();
     private volatile boolean closed = false;
 
     private ConnectionManager(VictorConfiguration configuration) {
@@ -60,6 +69,14 @@ public final class ConnectionManager {
             return transactionalConnection;
         }
 
+        // Reuse the connection bound to the current eager-mapping scope, if any, so a
+        // nested relationship load runs on the same physical connection instead of
+        // pulling a second one from the pool (see beginSharedConnection).
+        Connection sharedConnection = activeConnection.get();
+        if (sharedConnection != null) {
+            return sharedConnection;
+        }
+
         try {
             Connection conn = dataSource.getConnection();
 
@@ -82,6 +99,47 @@ public final class ConnectionManager {
     }
 
     /**
+     * Binds {@code conn} as the thread's connection for the current eager entity-graph
+     * mapping. While a scope is active, every {@link #getConnection()} on this thread
+     * returns {@code conn}, so nested relationship loads reuse a single physical
+     * connection instead of each checking out another from the pool — which, with a
+     * multi-level EAGER graph under concurrency, otherwise self-deadlocks the pool.
+     *
+     * <p>Only the outermost read establishes the scope. Returns {@code true} when this
+     * call established it (and is therefore responsible for calling
+     * {@link #endSharedConnection()} and closing the connection); {@code false} when a
+     * transaction or an outer mapping scope already owns the connection.</p>
+     */
+    public boolean beginSharedConnection(Connection conn) {
+        if (TransactionContext.getCurrentConnection() != null) {
+            return false;
+        }
+        if (activeConnection.get() != null) {
+            return false;
+        }
+        activeConnection.set(conn);
+        return true;
+    }
+
+    /**
+     * Ends the eager-mapping scope opened by {@link #beginSharedConnection(Connection)}.
+     * Must be called only by the owner (the call that received {@code true}).
+     */
+    public void endSharedConnection() {
+        activeConnection.remove();
+    }
+
+    /**
+     * Whether {@code connection} is owned by an outer scope — an active transaction or the
+     * current eager-mapping scope — and therefore must not be closed by an inner operation.
+     */
+    public boolean isManagedExternally(Connection connection) {
+        return connection != null
+                && (connection == TransactionContext.getCurrentConnection()
+                    || connection == activeConnection.get());
+    }
+
+    /**
      * Creates and configures a HikariCP data source.
      */
     private HikariDataSource createDataSource(VictorConfiguration config) {
@@ -98,14 +156,20 @@ public final class ConnectionManager {
             hikariConfig.setPassword(config.password());
         }
 
-        // Pool sizing
-        hikariConfig.setMinimumIdle(DEFAULT_MIN_POOL_SIZE);
-        hikariConfig.setMaximumPoolSize(DEFAULT_MAX_POOL_SIZE);
+        // Custom connection properties (from VictorBuilder.property(...)). Note: the
+        // accessor wraps the values as Properties defaults, so iterate stringPropertyNames()
+        // (which includes defaults) — a plain forEach would see no entries.
+        Properties props = config.connectionProperties();
 
-        // Timeouts
-        hikariConfig.setConnectionTimeout(DEFAULT_CONNECTION_TIMEOUT);
-        hikariConfig.setIdleTimeout(DEFAULT_IDLE_TIMEOUT);
-        hikariConfig.setMaxLifetime(DEFAULT_MAX_LIFETIME);
+        // Pool sizing — overridable via connection properties, e.g.
+        // .property("maximumPoolSize", "50"); falls back to the defaults otherwise.
+        hikariConfig.setMinimumIdle(intProperty(props, "minimumIdle", DEFAULT_MIN_POOL_SIZE));
+        hikariConfig.setMaximumPoolSize(intProperty(props, "maximumPoolSize", DEFAULT_MAX_POOL_SIZE));
+
+        // Timeouts — overridable via connection properties.
+        hikariConfig.setConnectionTimeout(longProperty(props, "connectionTimeout", DEFAULT_CONNECTION_TIMEOUT));
+        hikariConfig.setIdleTimeout(longProperty(props, "idleTimeout", DEFAULT_IDLE_TIMEOUT));
+        hikariConfig.setMaxLifetime(longProperty(props, "maxLifetime", DEFAULT_MAX_LIFETIME));
 
         // Performance settings
         hikariConfig.setAutoCommit(true);
@@ -116,10 +180,13 @@ public final class ConnectionManager {
             hikariConfig.setLeakDetectionThreshold(60000); // 60 seconds
         }
 
-        // Apply custom connection properties
-        config.connectionProperties().forEach((key, value) ->
-            hikariConfig.addDataSourceProperty(key.toString(), value)
-        );
+        // Forward the remaining custom properties to the driver as DataSource properties
+        // (the pool-tuning keys above are Hikari settings, not driver properties).
+        for (String name : props.stringPropertyNames()) {
+            if (!POOL_SETTING_KEYS.contains(name)) {
+                hikariConfig.addDataSourceProperty(name, props.getProperty(name));
+            }
+        }
 
         // Apply dialect-specific default properties
         config.dialect().getDefaultConnectionProperties().forEach((key, value) ->
@@ -167,6 +234,32 @@ public final class ConnectionManager {
     private void checkNotClosed() {
         if (closed) {
             throw new VictorException("Connection manager is closed");
+        }
+    }
+
+    private static int intProperty(Properties props, String key, int defaultValue) {
+        String raw = props.getProperty(key);
+        if (raw == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            VictorLogger.warn("Invalid integer for property '{}' ('{}'), using default {}", key, raw, defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private static long longProperty(Properties props, String key, long defaultValue) {
+        String raw = props.getProperty(key);
+        if (raw == null) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            VictorLogger.warn("Invalid long for property '{}' ('{}'), using default {}", key, raw, defaultValue);
+            return defaultValue;
         }
     }
 

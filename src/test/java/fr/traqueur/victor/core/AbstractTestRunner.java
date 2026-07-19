@@ -70,4 +70,12 @@ public abstract class AbstractTestRunner {
             return AbstractTestRunner.this.configureVictor();
         }
     }
+
+    @Nested
+    class ConnectionPool extends AbstractConnectionPoolTest {
+        @Override
+        protected VictorBuilder configureVictor() {
+            return AbstractTestRunner.this.configureVictor();
+        }
+    }
 }

@@ -300,6 +300,10 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         }
 
         Connection conn = connectionManager.getConnection();
+        // Reuse this connection for the whole eager entity-graph mapping (nested
+        // loadRelationship calls) so a multi-level graph consumes one connection, not one
+        // per level — which self-deadlocks the pool under concurrency.
+        boolean ownsScope = connectionManager.beginSharedConnection(conn);
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
@@ -316,6 +320,9 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query: " + sql, e);
         } finally {
+            if (ownsScope) {
+                connectionManager.endSharedConnection();
+            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -326,6 +333,9 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         }
 
         Connection conn = connectionManager.getConnection();
+        // See executeQuery: bind the connection for the eager-mapping scope so nested
+        // relationship loads reuse it instead of exhausting the pool.
+        boolean ownsScope = connectionManager.beginSharedConnection(conn);
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             if (params != null) {
                 setParameters(stmt, params);
@@ -341,6 +351,9 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
         } catch (SQLException e) {
             throw new VictorException("Failed to execute query single: " + sql, e);
         } finally {
+            if (ownsScope) {
+                connectionManager.endSharedConnection();
+            }
             closeConnectionIfNotTransactional(conn);
         }
     }
@@ -464,7 +477,9 @@ public record SqlExecutor(ConnectionManager connectionManager, Dialect dialect) 
 
     private void closeConnectionIfNotTransactional(Connection connection) {
         try {
-            if (TransactionContext.getCurrentConnection() != connection) {
+            // Do not close a connection owned by an outer scope: an active transaction, or
+            // the eager-mapping scope that a nested read is reusing (see beginSharedConnection).
+            if (!connectionManager.isManagedExternally(connection)) {
                 if (connection != null && !connection.isClosed()) {
                     connection.close();
                 }
