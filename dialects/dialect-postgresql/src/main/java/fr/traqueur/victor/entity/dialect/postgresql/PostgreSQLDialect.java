@@ -285,12 +285,16 @@ public class PostgreSQLDialect implements Dialect {
 
     @Override
     public String generateListColumnsSQL(String tableName, String schemaName) {
+        // Victor creates tables with quoted identifiers, so PostgreSQL preserves their case,
+        // while unquoted legacy tables are folded to lowercase. Match case-insensitively so
+        // introspection sees the columns in both cases — otherwise migration believes every
+        // column is missing and replays failing ADD COLUMNs.
         String schema = (schemaName != null) ? schemaName.toLowerCase() : "public";
         return String.format(
                 "SELECT column_name AS COLUMN_NAME, data_type AS DATA_TYPE, " +
                 "is_nullable AS IS_NULLABLE, column_default AS COLUMN_DEFAULT " +
                 "FROM information_schema.columns " +
-                "WHERE table_name = '%s' AND table_schema = '%s'",
+                "WHERE LOWER(table_name) = '%s' AND LOWER(table_schema) = '%s'",
                 tableName.toLowerCase(), schema
         );
     }

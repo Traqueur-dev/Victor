@@ -211,18 +211,22 @@ public class H2Dialect implements Dialect {
 
     @Override
     public String generateListColumnsSQL(String tableName, String schemaName) {
+        // Victor creates tables with quoted identifiers, which H2 stores case-sensitively
+        // (lowercase), while unquoted legacy tables are stored uppercase. Match
+        // case-insensitively so introspection sees the columns in both cases — otherwise
+        // migration believes every column is missing and replays failing ADD COLUMNs.
         if (schemaName != null) {
             return String.format(
                     "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT " +
                     "FROM INFORMATION_SCHEMA.COLUMNS " +
-                    "WHERE TABLE_NAME = '%s' AND TABLE_SCHEMA = '%s'",
+                    "WHERE UPPER(TABLE_NAME) = '%s' AND UPPER(TABLE_SCHEMA) = '%s'",
                     tableName.toUpperCase(), schemaName.toUpperCase()
             );
         }
         return String.format(
                 "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT " +
                 "FROM INFORMATION_SCHEMA.COLUMNS " +
-                "WHERE TABLE_NAME = '%s'",
+                "WHERE UPPER(TABLE_NAME) = '%s'",
                 tableName.toUpperCase()
         );
     }

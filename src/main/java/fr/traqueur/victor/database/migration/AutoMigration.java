@@ -425,7 +425,12 @@ public final class AutoMigration {
         String schemaName = determineSchemaForTableListing();
         String sql = dialect.generateListTablesSQL(schemaName);
 
-        Set<String> tables = sqlExecutor.executeQueryForStringSet(sql);
+        // Normalize to lowercase: dialects return names as stored (H2 uppercases unquoted
+        // identifiers, PostgreSQL preserves quoted case...) while migrateTable() compares
+        // against metadata.getTableName().toLowerCase().
+        Set<String> tables = sqlExecutor.executeQueryForStringSet(sql).stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
 
         VictorLogger.debug("Found {} existing tables for schema {}", tables.size(),
                 (schemaName != null ? schemaName : "default"));

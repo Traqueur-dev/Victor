@@ -11,11 +11,15 @@ import fr.traqueur.victor.entity.Model;
 import fr.traqueur.victor.entity.Repository;
 import fr.traqueur.victor.entity.Service;
 import fr.traqueur.victor.entity.UserEntity;
+import fr.traqueur.victor.entity.dialect.h2.H2Dialect;
 import fr.traqueur.victor.exceptions.VictorConversionException;
 import fr.traqueur.victor.utils.VictorLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.sql.DriverManager;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,6 +83,69 @@ class H2Test extends AbstractTestRunner {
             assertTrue(ex.getMessage().contains("fromModel"), ex.getMessage());
         } finally {
             victor.close();
+        }
+    }
+
+    @Test
+    @DisplayName("H2: column introspection sees quoted (lowercase) tables")
+    void testListColumnsSeesQuotedLowercaseTables() throws Exception {
+        // Victor quotes identifiers at CREATE time, so H2 stores them lowercase
+        // case-sensitively. generateListColumnsSQL must still find the columns —
+        // regression: it used to filter on TABLE_NAME = 'UPPERCASED' and match nothing,
+        // so migration replayed failing ADD COLUMNs on every startup.
+        try (var conn = DriverManager.getConnection("jdbc:h2:mem:colcase_" + System.nanoTime())) {
+            try (var stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE \"economy_txns\" (" +
+                        "\"id\" VARCHAR(64) NOT NULL, " +
+                        "\"profile_id\" UUID NOT NULL, " +
+                        "PRIMARY KEY (\"id\"))");
+            }
+
+            H2Dialect dialect = new H2Dialect();
+            Set<String> columns = new HashSet<>();
+            try (var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery(dialect.generateListColumnsSQL("economy_txns", null))) {
+                while (rs.next()) {
+                    columns.add(rs.getString("COLUMN_NAME").toLowerCase());
+                }
+            }
+
+            assertEquals(Set.of("id", "profile_id"), columns);
+        }
+    }
+
+    @Test
+    @DisplayName("H2: running auto-migration twice on the same database is idempotent")
+    void testDoubleMigrationIdempotent() {
+        String database = "remigrate_" + UUID.randomUUID().toString().replace("-", "");
+
+        var first = configureVictor()
+                .database(database)
+                .autoMigrate()
+                .entities(UserEntity.class)
+                .build();
+        first.close();
+
+        // Second boot on the same (still-open, DB_CLOSE_DELAY=-1) database: migration must
+        // see the existing quoted tables/columns and leave the schema usable.
+        var second = configureVictor()
+                .database(database)
+                .autoMigrate()
+                .entities(UserEntity.class)
+                .build();
+        try {
+            var repo = second.createRepository(
+                    fr.traqueur.victor.repository.UserRepository.class);
+            UserEntity saved = repo.save(
+                    new UserEntity(null,
+                            "remigrated_" + System.nanoTime(),
+                            "remigrate@test.com",
+                            30,
+                            true,
+                            "Test"));
+            assertNotNull(saved.id());
+        } finally {
+            second.close();
         }
     }
 
