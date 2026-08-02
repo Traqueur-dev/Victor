@@ -150,6 +150,27 @@ class H2Test extends AbstractTestRunner {
         }
     }
 
+    @Test
+    @DisplayName("@Query: string and boolean literals survive identifier preprocessing")
+    void testQueryLiteralsNotMangled() {
+        var victor = configureVictor()
+                .autoMigrate()
+                .entities(UserEntity.class)
+                .build();
+        try {
+            var repo = victor.createRepository(
+                    fr.traqueur.victor.repository.UserRepository.class);
+            repo.save(new UserEntity(null, "lit_" + System.nanoTime(), "lit@test.com", 30, true, "Literal"));
+
+            // Before the fix: 'Literal' became '"Literal"' and TRUE became "TRUE" — 0 rows / SQL error.
+            assertEquals(1, repo.findByLiteralName().size());
+            assertEquals(1, repo.deactivateLiterals());
+            assertFalse(repo.findByLiteralName().getFirst().active());
+        } finally {
+            victor.close();
+        }
+    }
+
     // Regression: repeating @VictorIndex from OUTSIDE the annotations package requires the
     // @Repeatable container (VictorIndexes) to be public — this entity fails to compile otherwise.
     @Table(table = "indexed_cfg")

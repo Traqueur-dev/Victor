@@ -40,7 +40,8 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
             "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
             "AS", "ASC", "DESC", "LIMIT", "OFFSET", "COUNT", "SUM", "AVG",
             "MIN", "MAX", "DISTINCT", "NULL", "NOT", "IS", "IN", "BETWEEN",
-            "LIKE", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "END"
+            "LIKE", "EXISTS", "CASE", "WHEN", "THEN", "ELSE", "END",
+            "TRUE", "FALSE"
     );
 
     private final Class<E> entityClass;
@@ -117,18 +118,24 @@ public class RepositoryProxyHandler<E extends Entity<MODEL>, MODEL extends Model
     }
 
     private String preprocessSqlQuery(String sql) {
-        Pattern identifierPattern = Pattern.compile("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
-        Matcher matcher = identifierPattern.matcher(sql);
+        // The alternation consumes single-quoted string literals ('' = escaped quote) so only
+        // identifiers OUTSIDE literals get dialect-quoted — a literal like 'ACTIVE' must never
+        // become '"ACTIVE"' (which silently matches nothing).
+        Pattern tokenPattern = Pattern.compile("'(?:[^']|'')*'|\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        Matcher matcher = tokenPattern.matcher(sql);
         StringBuilder result = new StringBuilder();
 
         while (matcher.find()) {
             String identifier = matcher.group(1);
-            String upperIdentifier = identifier.toUpperCase();
-            if (SQL_KEYWORDS.contains(upperIdentifier) || identifier.matches("\\d+")) {
-                matcher.appendReplacement(result, identifier);
+            String replacement;
+            if (identifier == null) {
+                replacement = matcher.group(); // string literal — untouched
+            } else if (SQL_KEYWORDS.contains(identifier.toUpperCase()) || identifier.matches("\\d+")) {
+                replacement = identifier;
             } else {
-                matcher.appendReplacement(result, dialect.quoteIdentifier(identifier));
+                replacement = dialect.quoteIdentifier(identifier);
             }
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);
         return result.toString();

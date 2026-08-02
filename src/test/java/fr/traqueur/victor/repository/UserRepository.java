@@ -71,4 +71,12 @@ public interface UserRepository extends Repository<UserEntity, User, Long> {
     // Query de delete
     @Query("DELETE FROM users WHERE age < :minAge")
     int deleteByAgeLessThan(int minAge);
+
+    // Régression préprocesseur : les littéraux chaîne et booléens ne doivent pas être
+    // quotés comme des identifiants ('Literal' ≠ '"Literal"', TRUE ≠ "TRUE").
+    @Query("UPDATE users SET active = FALSE WHERE name = 'Literal' AND active = TRUE")
+    int deactivateLiterals();
+
+    @Query("SELECT * FROM users WHERE name = 'Literal'")
+    List<UserEntity> findByLiteralName();
 }
