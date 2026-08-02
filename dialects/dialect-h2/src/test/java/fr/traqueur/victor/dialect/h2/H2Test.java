@@ -5,6 +5,7 @@ import fr.traqueur.victor.VictorBuilder;
 import fr.traqueur.victor.annotations.Column;
 import fr.traqueur.victor.annotations.Id;
 import fr.traqueur.victor.annotations.Table;
+import fr.traqueur.victor.annotations.VictorIndex;
 import fr.traqueur.victor.core.AbstractTestRunner;
 import fr.traqueur.victor.entity.Entity;
 import fr.traqueur.victor.entity.Model;
@@ -122,7 +123,7 @@ class H2Test extends AbstractTestRunner {
         var first = configureVictor()
                 .database(database)
                 .autoMigrate()
-                .entities(UserEntity.class)
+                .entities(UserEntity.class, IndexedEntity.class)
                 .build();
         first.close();
 
@@ -131,7 +132,7 @@ class H2Test extends AbstractTestRunner {
         var second = configureVictor()
                 .database(database)
                 .autoMigrate()
-                .entities(UserEntity.class)
+                .entities(UserEntity.class, IndexedEntity.class)
                 .build();
         try {
             var repo = second.createRepository(
@@ -147,6 +148,27 @@ class H2Test extends AbstractTestRunner {
         } finally {
             second.close();
         }
+    }
+
+    // Regression: repeating @VictorIndex from OUTSIDE the annotations package requires the
+    // @Repeatable container (VictorIndexes) to be public — this entity fails to compile otherwise.
+    @Table(table = "indexed_cfg")
+    @VictorIndex(columns = {"status", "created_at"})
+    @VictorIndex(columns = {"owner", "status"}, unique = true)
+    record IndexedEntity(
+            @Id Long id,
+            @Column(length = 16) String status,
+            @Column(length = 36) String owner,
+            @Column(name = "created_at") long createdAt
+    ) implements Entity<IndexedModel> {
+        @Override public IndexedModel toModel() { return new IndexedModel(); }
+        public static IndexedEntity fromModel(IndexedModel model) { return new IndexedEntity(model.getId(), null, null, 0L); }
+    }
+
+    static class IndexedModel implements Model<Long> {
+        private Long id;
+        @Override public Long getId() { return id; }
+        @Override public void setId(Long id) { this.id = id; }
     }
 
     static class BadModel implements Model<Long> {

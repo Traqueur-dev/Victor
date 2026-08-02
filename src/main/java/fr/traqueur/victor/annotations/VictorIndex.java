@@ -19,9 +19,3 @@ public @interface VictorIndex {
 
     String where() default "";
 }
-
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE, ElementType.FIELD, ElementType.RECORD_COMPONENT})
-@interface VictorIndexes {
-    VictorIndex[] value();
-}
